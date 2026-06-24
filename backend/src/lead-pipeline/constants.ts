@@ -1,0 +1,1 @@
+export const LEAD_PIPELINE_AUTO = 'LEAD_PIPELINE_AUTO';

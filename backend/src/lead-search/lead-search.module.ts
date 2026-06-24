@@ -7,6 +7,7 @@ import { LeadSearchController } from './lead-search.controller';
 import { LeadSearchProcessor } from './lead-search.processor';
 import { LeadSearchService } from './lead-search.service';
 import { createLeadSearchProvider } from './providers/lead-search-provider.factory';
+import { LeadPipelineModule } from '../lead-pipeline/lead-pipeline.module';
 
 @Module({})
 export class LeadSearchModule {
@@ -17,9 +18,12 @@ export class LeadSearchModule {
 
     return {
       module: LeadSearchModule,
-      imports: useQueue
-        ? [BullModule.registerQueue({ name: LEAD_SEARCH_QUEUE })]
-        : [],
+      imports: [
+        LeadPipelineModule,
+        ...(useQueue
+          ? [BullModule.registerQueue({ name: LEAD_SEARCH_QUEUE })]
+          : []),
+      ],
       controllers: [LeadSearchController],
       providers: [
         LeadSearchService,
@@ -37,9 +41,23 @@ export class LeadSearchModule {
 }
 
 export function bullRootImports() {
-  const useQueue =
+  const searchUseQueue =
     process.env.LEAD_SEARCH_SYNC !== 'true' &&
     Boolean(process.env.REDIS_URL);
+  const enrichmentUseQueue =
+    (process.env.LEAD_ENRICHMENT_SYNC ?? 'true') !== 'true' &&
+    Boolean(process.env.REDIS_URL);
+  const companyDiscoveryUseQueue =
+    (process.env.LEAD_COMPANY_DISCOVERY_SYNC ?? 'true') !== 'true' &&
+    Boolean(process.env.REDIS_URL);
+  const contactDiscoveryUseQueue =
+    (process.env.LEAD_CONTACT_DISCOVERY_SYNC ?? 'true') !== 'true' &&
+    Boolean(process.env.REDIS_URL);
+  const useQueue =
+    searchUseQueue ||
+    enrichmentUseQueue ||
+    companyDiscoveryUseQueue ||
+    contactDiscoveryUseQueue;
 
   if (!useQueue) {
     return [];

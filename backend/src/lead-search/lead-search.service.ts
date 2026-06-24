@@ -1,8 +1,8 @@
-import { Inject, Injectable, Optional } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { LeadSearchJobStatus, LeadStatus } from '../../generated/prisma/client';
+import { Lead, LeadSearchJobStatus, LeadStatus } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LEAD_SEARCH_PROVIDER, LEAD_SEARCH_QUEUE } from './constants';
 import { CreateLeadDto } from './dto/create-lead.dto';
@@ -12,9 +12,12 @@ import type { LeadSearchProvider } from './interfaces/lead-search-provider.inter
 import {
   DiscoveredLead,
 } from './interfaces/lead-search-provider.interface';
+import { LeadPipelineService } from '../lead-pipeline/lead-pipeline.service';
 
 @Injectable()
 export class LeadSearchService {
+  private readonly logger = new Logger(LeadSearchService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
@@ -23,6 +26,8 @@ export class LeadSearchService {
     @Optional()
     @InjectQueue(LEAD_SEARCH_QUEUE)
     private readonly leadSearchQueue?: Queue,
+    @Optional()
+    private readonly leadPipelineService?: LeadPipelineService,
   ) {}
 
   async startSearch(dto: SearchLeadsDto) {
@@ -161,7 +166,7 @@ export class LeadSearchService {
   }
 
   async createLead(dto: CreateLeadDto) {
-    return this.prisma.lead.upsert({
+    const lead = await this.prisma.lead.upsert({
       where: { profileUrl: dto.profileUrl },
       update: {
         name: dto.name,
@@ -175,16 +180,34 @@ export class LeadSearchService {
         profileUrl: dto.profileUrl,
       },
     });
+
+    if (
+      this.leadPipelineService?.isAutoEnabled()
+    ) {
+      try {
+        return await this.leadPipelineService.processLead(lead);
+      } catch (error) {
+        this.logger.warn(
+          `Pipeline failed for lead ${lead.id}: ${
+            error instanceof Error ? error.message : error
+          }`,
+        );
+      }
+    }
+
+    return lead;
   }
 
   private async persistDiscoveredLeads(
     jobId: string,
     discovered: DiscoveredLead[],
   ) {
+    const savedLeads: Lead[] = [];
+
     for (const lead of discovered) {
       const githubUrl = lead.githubUrl ?? this.extractGithubUrl(lead.profileUrl);
 
-      await this.prisma.lead.upsert({
+      const saved = await this.prisma.lead.upsert({
         where: { profileUrl: lead.profileUrl },
         update: {
           name: lead.name,
@@ -215,6 +238,38 @@ export class LeadSearchService {
               : LeadStatus.NEW,
         },
       });
+
+      savedLeads.push(saved);
+    }
+
+    await this.runPipelineForLeads(savedLeads);
+  }
+
+  private async runPipelineForLead(lead: Lead) {
+    if (!this.leadPipelineService?.isAutoEnabled()) {
+      return;
+    }
+
+    try {
+      await this.leadPipelineService.processLead(lead);
+    } catch (error) {
+      this.logger.warn(
+        `Pipeline failed for lead ${lead.id}: ${
+          error instanceof Error ? error.message : error
+        }`,
+      );
+    }
+  }
+
+  private async runPipelineForLeads(leads: Lead[]) {
+    if (!this.leadPipelineService?.isAutoEnabled() || !leads.length) {
+      return;
+    }
+
+    this.logger.log(`Running pipeline for ${leads.length} lead(s)`);
+
+    for (const lead of leads) {
+      await this.runPipelineForLead(lead);
     }
   }
 

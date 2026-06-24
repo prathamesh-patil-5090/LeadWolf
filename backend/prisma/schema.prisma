@@ -28,26 +28,55 @@ enum LeadSearchJobStatus {
 }
 
 model Lead {
-  id          String     @id @default(cuid())
-  name        String
-  role        String
-  company     String
-  profileUrl  String     @unique
-  website     String?
-  githubUrl   String?
-  linkedinUrl String?
-  email       String?
-  verified    Boolean    @default(false)
-  status      LeadStatus @default(NEW)
-  searchJobId String?
-  searchJob   LeadSearchJob? @relation(fields: [searchJobId], references: [id], onDelete: SetNull)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id              String     @id @default(cuid())
+  name            String
+  role            String
+  company         String
+  profileUrl      String     @unique
+  location        String?
+  website         String?
+  portfolioUrl    String?
+  companyWebsite  String?
+  companySize     String?
+  githubUrl       String?
+  linkedinUrl     String?
+  email           String?
+  emailSource     String?
+  discoveredContacts Json?
+  verified        Boolean    @default(false)
+  status          LeadStatus @default(NEW)
+  companyId       String?
+  companyRecord   Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  searchJobId     String?
+  searchJob       LeadSearchJob? @relation(fields: [searchJobId], references: [id], onDelete: SetNull)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
 
   @@index([status])
   @@index([company])
   @@index([role])
   @@index([searchJobId])
+  @@index([companyId])
+}
+
+model Company {
+  id                   String    @id @default(cuid())
+  name                 String
+  domain               String    @unique
+  website              String?
+  scrapedContent       String?   @db.Text
+  summary              String?   @db.Text
+  industry             String?
+  products             String?   @db.Text
+  personalizationHooks Json?
+  discoveredEmails     Json?
+  discoveredAt         DateTime?
+  summarizedAt         DateTime?
+  leads                Lead[]
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([name])
 }
 
 model LeadSearchJob {
