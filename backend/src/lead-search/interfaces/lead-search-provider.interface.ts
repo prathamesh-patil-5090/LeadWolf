@@ -3,11 +3,17 @@ export interface DiscoveredLead {
   role: string;
   company: string;
   profileUrl: string;
+  email?: string;
+  website?: string;
+  githubUrl?: string;
+  linkedinUrl?: string;
 }
 
 export interface LeadSearchCriteria {
   query: string;
   role?: string;
+  roles?: string[];
+  expandTechRoles?: boolean;
   location?: string;
   company?: string;
   limit: number;

@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  IsArray,
+  IsBoolean,
   IsInt,
   IsOptional,
   IsString,
@@ -11,7 +13,7 @@ import {
 
 export class SearchLeadsDto {
   @IsString()
-  @MinLength(3)
+  @MinLength(2)
   @MaxLength(200)
   query!: string;
 
@@ -19,6 +21,17 @@ export class SearchLeadsDto {
   @IsString()
   @MaxLength(100)
   role?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @MaxLength(100, { each: true })
+  roles?: string[];
+
+  @IsOptional()
+  @Type(() => Boolean)
+  @IsBoolean()
+  expandTechRoles?: boolean;
 
   @IsOptional()
   @IsString()

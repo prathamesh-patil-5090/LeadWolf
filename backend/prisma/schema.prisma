@@ -35,6 +35,7 @@ model Lead {
   profileUrl  String     @unique
   website     String?
   githubUrl   String?
+  linkedinUrl String?
   email       String?
   verified    Boolean    @default(false)
   status      LeadStatus @default(NEW)
@@ -55,6 +56,8 @@ model LeadSearchJob {
   role       String?
   location   String?
   company    String?
+  roles         String[]            @default([])
+  expandTechRoles Boolean           @default(true)
   limit      Int                 @default(25)
   status     LeadSearchJobStatus @default(PENDING)
   leadsFound Int                 @default(0)

@@ -1,11 +1,12 @@
 import { DynamicModule, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
+import { BrowserService } from './browser/browser.service';
 import { LEAD_SEARCH_PROVIDER, LEAD_SEARCH_QUEUE } from './constants';
 import { LeadSearchController } from './lead-search.controller';
 import { LeadSearchProcessor } from './lead-search.processor';
 import { LeadSearchService } from './lead-search.service';
-import { MockLeadSearchProvider } from './providers/mock-lead-search.provider';
+import { createLeadSearchProvider } from './providers/lead-search-provider.factory';
 
 @Module({})
 export class LeadSearchModule {
@@ -22,10 +23,12 @@ export class LeadSearchModule {
       controllers: [LeadSearchController],
       providers: [
         LeadSearchService,
+        BrowserService,
         ...(useQueue ? [LeadSearchProcessor] : []),
         {
           provide: LEAD_SEARCH_PROVIDER,
-          useClass: MockLeadSearchProvider,
+          inject: [ConfigService, BrowserService],
+          useFactory: createLeadSearchProvider,
         },
       ],
       exports: [LeadSearchService],
@@ -49,6 +52,7 @@ export function bullRootImports() {
       useFactory: (configService: ConfigService) => ({
         connection: {
           url: configService.getOrThrow<string>('REDIS_URL'),
+          maxRetriesPerRequest: null,
         },
       }),
     }),

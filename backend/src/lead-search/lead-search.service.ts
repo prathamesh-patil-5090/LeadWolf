@@ -2,7 +2,7 @@ import { Inject, Injectable, Optional } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
-import { LeadSearchJobStatus } from '../../generated/prisma/client';
+import { LeadSearchJobStatus, LeadStatus } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LEAD_SEARCH_PROVIDER, LEAD_SEARCH_QUEUE } from './constants';
 import { CreateLeadDto } from './dto/create-lead.dto';
@@ -32,6 +32,8 @@ export class LeadSearchService {
       data: {
         query: dto.query,
         role: dto.role,
+        roles: dto.roles ?? [],
+        expandTechRoles: dto.expandTechRoles ?? true,
         location: dto.location,
         company: dto.company,
         limit,
@@ -81,6 +83,8 @@ export class LeadSearchService {
       const discovered = await this.searchProvider.search({
         query: job.query,
         role: job.role ?? undefined,
+        roles: job.roles.length > 0 ? job.roles : undefined,
+        expandTechRoles: job.expandTechRoles,
         location: job.location ?? undefined,
         company: job.company ?? undefined,
         limit: job.limit,
@@ -178,23 +182,53 @@ export class LeadSearchService {
     discovered: DiscoveredLead[],
   ) {
     for (const lead of discovered) {
+      const githubUrl = lead.githubUrl ?? this.extractGithubUrl(lead.profileUrl);
+
       await this.prisma.lead.upsert({
         where: { profileUrl: lead.profileUrl },
         update: {
           name: lead.name,
           role: lead.role,
           company: lead.company,
+          email: lead.email,
+          website: lead.website,
+          githubUrl,
+          linkedinUrl: lead.linkedinUrl,
           searchJobId: jobId,
+          ...(lead.email || lead.website || lead.linkedinUrl
+            ? { status: LeadStatus.ENRICHED }
+            : {}),
         },
         create: {
           name: lead.name,
           role: lead.role,
           company: lead.company,
           profileUrl: lead.profileUrl,
+          email: lead.email,
+          website: lead.website,
+          githubUrl,
+          linkedinUrl: lead.linkedinUrl,
           searchJobId: jobId,
+          status:
+            lead.email || lead.website || lead.linkedinUrl
+              ? LeadStatus.ENRICHED
+              : LeadStatus.NEW,
         },
       });
     }
+  }
+
+  private extractGithubUrl(profileUrl: string): string | undefined {
+    try {
+      const parsed = new URL(profileUrl);
+      if (parsed.hostname === 'github.com') {
+        return profileUrl;
+      }
+    } catch {
+      return undefined;
+    }
+
+    return undefined;
   }
 
   private shouldRunSynchronously() {
