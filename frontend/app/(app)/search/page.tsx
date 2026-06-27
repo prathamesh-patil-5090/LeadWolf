@@ -144,7 +144,7 @@ export default function SearchPage() {
         title="Lead search"
         description="Discover developers via GitHub + LinkedIn (Bright Data when configured)"
       />
-      <div className="grid gap-6 p-6 xl:grid-cols-[minmax(0,26rem)_1fr]">
+      <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,26rem)_1fr]">
         <Card className="h-fit">
           <CardHeader>
             <CardTitle>New search</CardTitle>
@@ -338,6 +338,32 @@ export default function SearchPage() {
 
                 {job.leads?.length ? (
                   <div className="rounded-md border">
+                    <div className="divide-y md:hidden">
+                      {job.leads.map((lead: Lead) => (
+                        <Link
+                          key={lead.id}
+                          href={`/leads/${lead.id}`}
+                          className="block space-y-1.5 p-4 transition-colors hover:bg-muted/40"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="font-medium">{lead.name}</p>
+                              <p className="truncate text-sm text-muted-foreground">
+                                {lead.role}
+                              </p>
+                            </div>
+                            <StatusBadge status={lead.status} />
+                          </div>
+                          <p className="text-sm">{lead.company}</p>
+                          {lead.location ? (
+                            <p className="text-xs text-muted-foreground">
+                              {lead.location}
+                            </p>
+                          ) : null}
+                        </Link>
+                      ))}
+                    </div>
+                    <div className="hidden md:block">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -376,6 +402,7 @@ export default function SearchPage() {
                         ))}
                       </TableBody>
                     </Table>
+                    </div>
                   </div>
                 ) : job.status === 'COMPLETED' ? (
                   <p className="text-sm text-muted-foreground">

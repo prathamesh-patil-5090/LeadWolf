@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Columns3, Loader2 } from 'lucide-react';
 import { LeadsDataTable } from '@/components/leads/leads-data-table';
 import { PageHeader } from '@/components/page-header';
+import { PaginationBar } from '@/components/pagination-bar';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -154,7 +155,7 @@ export default function LeadsPage() {
           </div>
         }
       />
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 p-4 sm:p-6">
         <div className="flex flex-wrap items-end gap-3">
           <div className="grid w-full max-w-xs gap-1.5">
             <Label htmlFor="role">Role</Label>
@@ -236,29 +237,13 @@ export default function LeadsPage() {
           )}
         </div>
 
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Page {page} of {totalPages} · showing {leads.length} of {total}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
+        <PaginationBar
+          summary={`Page ${page} of ${totalPages} · showing ${leads.length} of ${total}`}
+          page={page}
+          totalPages={totalPages}
+          onPrevious={() => setPage((p) => p - 1)}
+          onNext={() => setPage((p) => p + 1)}
+        />
       </div>
     </>
   );

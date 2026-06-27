@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { ExternalLink, Loader2 } from 'lucide-react';
 import { CompanyDetailSheet } from '@/components/company-detail-sheet';
 import { PageHeader } from '@/components/page-header';
+import { PaginationBar } from '@/components/pagination-bar';
 import { Button } from '@/components/ui/button';
 import {
   Table,
@@ -58,12 +59,50 @@ export default function CompaniesPage() {
           </Button>
         }
       />
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 p-4 sm:p-6">
         <p className="text-sm text-muted-foreground">
           Click a row to view the full company profile saved in the database.
         </p>
 
         <div className="rounded-md border">
+          <div className="divide-y md:hidden">
+            {loading ? (
+              <div className="flex h-24 items-center justify-center">
+                <Loader2 className="mx-auto size-5 animate-spin" />
+              </div>
+            ) : companies.length === 0 ? (
+              <div className="flex h-24 items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                No companies yet. Run company discovery on enriched leads.
+              </div>
+            ) : (
+              companies.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className="w-full space-y-1.5 p-4 text-left transition-colors hover:bg-muted/50 active:bg-muted/70"
+                  onClick={() => openCompany(c)}
+                >
+                  <p className="font-medium">{c.name}</p>
+                  <p className="text-sm text-primary">
+                    {c.domain}
+                    {c.website ? (
+                      <ExternalLink className="ml-1 inline size-3" />
+                    ) : null}
+                  </p>
+                  <div className="flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+                    <span>{c.industry ?? '—'}</span>
+                    <span>
+                      {c.discoveredAt
+                        ? new Date(c.discoveredAt).toLocaleDateString()
+                        : '—'}
+                    </span>
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -130,31 +169,16 @@ export default function CompaniesPage() {
               )}
             </TableBody>
           </Table>
-        </div>
-
-        <div className="flex justify-between text-sm text-muted-foreground">
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
           </div>
         </div>
+
+        <PaginationBar
+          summary={`Page ${page} of ${totalPages}`}
+          page={page}
+          totalPages={totalPages}
+          onPrevious={() => setPage((p) => p - 1)}
+          onNext={() => setPage((p) => p + 1)}
+        />
       </div>
 
       <CompanyDetailSheet

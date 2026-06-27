@@ -121,14 +121,14 @@ export default function PipelinePage() {
         }
       />
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         {loading && !logs ? (
           <div className="flex h-32 items-center justify-center">
             <Loader2 className="size-8 animate-spin text-muted-foreground" />
           </div>
         ) : queue ? (
           <>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+            <div className="grid gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
               <QueueCard
                 title="Queue"
                 value={queue.enabled ? 'BullMQ' : 'Sync mode'}
@@ -151,7 +151,7 @@ export default function PipelinePage() {
             </div>
 
             <Tabs defaultValue="pending">
-              <TabsList>
+              <TabsList className="h-auto w-full max-w-full flex-wrap justify-start gap-1 sm:w-fit sm:flex-nowrap">
                 <TabsTrigger value="pending">
                   Pending ({logs?.pending.length ?? 0})
                 </TabsTrigger>

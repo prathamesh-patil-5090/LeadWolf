@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { EngagementBadges } from '@/components/engagement-badges';
 import { PageHeader } from '@/components/page-header';
+import { PaginationBar } from '@/components/pagination-bar';
 import { SentEmailDetailSheet } from '@/components/sent-email-detail-sheet';
 import { StatusBadge } from '@/components/status-badge';
 import { Button } from '@/components/ui/button';
@@ -111,7 +112,7 @@ export default function SentEmailsPage() {
         }
       />
 
-      <div className="space-y-4 p-6">
+      <div className="space-y-4 p-4 sm:p-6">
         <div className="flex flex-wrap gap-3">
           <div className="grid w-full max-w-xs gap-1.5">
             <Label>Lead status</Label>
@@ -161,6 +162,51 @@ export default function SentEmailsPage() {
         </p>
 
         <div className="rounded-md border">
+          <div className="divide-y md:hidden">
+            {loading ? (
+              <div className="flex h-24 items-center justify-center">
+                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : rows.length === 0 ? (
+              <div className="flex h-24 items-center justify-center px-4 text-center text-sm text-muted-foreground">
+                No sent emails yet. Pipeline auto-send or POST /leads/:id/send
+                will populate this table.
+              </div>
+            ) : (
+              rows.map((row) => (
+                <button
+                  key={row.id}
+                  type="button"
+                  className="w-full space-y-2 p-4 text-left transition-colors hover:bg-muted/50 active:bg-muted/70"
+                  onClick={() => openRow(row)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="font-medium">{row.lead.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {row.sentTo ?? row.lead.email ?? '—'}
+                      </p>
+                    </div>
+                    <StatusBadge status={row.lead.status} />
+                  </div>
+                  <p className="line-clamp-2 text-sm">{row.subject}</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs text-muted-foreground">
+                      {row.sentAt
+                        ? new Date(row.sentAt).toLocaleString()
+                        : '—'}
+                    </span>
+                    <EngagementBadges
+                      engagement={row.engagement}
+                      leadStatus={row.lead.status}
+                    />
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+
+          <div className="hidden md:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -223,31 +269,16 @@ export default function SentEmailsPage() {
               )}
             </TableBody>
           </Table>
-        </div>
-
-        <div className="flex items-center justify-between text-sm text-muted-foreground">
-          <span>
-            Page {page} of {totalPages}
-          </span>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => p - 1)}
-            >
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => p + 1)}
-            >
-              Next
-            </Button>
           </div>
         </div>
+
+        <PaginationBar
+          summary={`Page ${page} of ${totalPages}`}
+          page={page}
+          totalPages={totalPages}
+          onPrevious={() => setPage((p) => p - 1)}
+          onNext={() => setPage((p) => p + 1)}
+        />
       </div>
 
       <SentEmailDetailSheet
