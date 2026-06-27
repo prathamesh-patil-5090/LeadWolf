@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -8,8 +10,8 @@ import {
   ListTodo,
   Mail,
   Search,
+  Settings,
   Users,
-  Radar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +22,7 @@ const nav = [
   { href: '/sent-emails', label: 'Sent emails', icon: Mail },
   { href: '/pipeline', label: 'Pipeline', icon: ListTodo },
   { href: '/companies', label: 'Companies', icon: Building2 },
+  { href: '/settings', label: 'Settings', icon: Settings },
 ];
 
 export function AppSidebar() {
@@ -27,10 +30,20 @@ export function AppSidebar() {
 
   return (
     <aside className="flex w-56 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
-      <div className="flex h-14 items-center gap-2 border-b px-4">
-        <Radar className="size-5" />
+      <Link
+        href="/dashboard"
+        className="flex h-14 items-center gap-2.5 border-b px-4 transition-colors hover:bg-sidebar-accent/40"
+      >
+        <Image
+          src="/leadwolf-logo.png"
+          alt="LeadWolf"
+          width={28}
+          height={28}
+          className="size-7 shrink-0 rounded-md"
+          priority
+        />
         <span className="font-semibold tracking-tight">LeadWolf</span>
-      </div>
+      </Link>
       <nav className="flex flex-1 flex-col gap-1 p-3">
         {nav.map(({ href, label, icon: Icon }) => {
           const active =

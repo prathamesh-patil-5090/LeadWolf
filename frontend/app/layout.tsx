@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'LeadWolf',
   description: 'AI-powered developer outreach dashboard',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/leadwolf-logo.png',
+  },
 };
 
 export default function RootLayout({

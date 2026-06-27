@@ -156,6 +156,21 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ force }),
     }),
+
+  getSettingsStatus: () =>
+    request<{ resetEnabled: boolean; redisConfigured: boolean }>(
+      '/settings/status',
+    ),
+  resetDatabase: () =>
+    request<{
+      success: boolean;
+      deleted: Record<string, number>;
+    }>('/settings/reset-database', { method: 'POST', body: '{}' }),
+  resetRedis: () =>
+    request<{ success: boolean; message: string }>('/settings/reset-redis', {
+      method: 'POST',
+      body: '{}',
+    }),
 };
 
 export { ApiError, API_BASE };
