@@ -35,7 +35,7 @@ export function mapSearchHitsToLeads(hits: RawSearchHit[]): DiscoveredLead[] {
 export function extractDuckDuckGoHits(html: string): RawSearchHit[] {
   if (html.includes('anomaly-modal') || html.includes('bots use DuckDuckGo')) {
     throw new Error(
-      'Search engine CAPTCHA detected. Set GOOGLE_CSE_API_KEY and GOOGLE_CSE_CX for reliable lead discovery.',
+      'Search engine CAPTCHA detected. Set LANGSEARCH_API_KEY or use LEAD_SEARCH_PROVIDER=github for reliable lead discovery.',
     );
   }
 

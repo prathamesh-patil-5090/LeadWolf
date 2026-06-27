@@ -64,7 +64,7 @@ export class PlaywrightLeadSearchProvider implements LeadSearchProvider {
 
       if (leads.length === 0) {
         throw new Error(
-          'No leads discovered via Playwright. Configure GOOGLE_CSE_API_KEY and GOOGLE_CSE_CX for reliable discovery.',
+          'No leads discovered via Playwright. Set LANGSEARCH_API_KEY or use LEAD_SEARCH_PROVIDER=github for reliable discovery.',
         );
       }
 

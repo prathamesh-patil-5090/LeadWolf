@@ -500,7 +500,6 @@ At least one of `GROQ_API_KEY` or `OPENROUTER_API_KEY` must be set for email gen
 | `bright_data` | `BRIGHT_DATA_API_KEY` | Paid | LinkedIn profiles by URL only |
 | `playwright` | — | Free | LinkedIn via scraping (CAPTCHA-prone) |
 | `mock` | — | Free | Offline dev / CI |
-| `google_cse` | `GOOGLE_CSE_*` | Legacy | Closed to new Google Cloud customers since Jan 2026 |
 
 **LinkedIn URL discovery order:** LangSearch → Playwright (DuckDuckGo). Bright Data scrapes discovered URLs (collect-by-url; keyword discovery is not available on most accounts).
 
@@ -752,7 +751,7 @@ When `*_SYNC=true`, that step runs in-process (no Redis queue for that module). 
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `LEAD_SEARCH_PROVIDER` | `github` | `github`, `combined`, `bright_data`, `mock`, `playwright`, `google_cse` |
+| `LEAD_SEARCH_PROVIDER` | `github` | `github`, `combined`, `bright_data`, `mock`, `playwright` |
 | `LEAD_SEARCH_BRIGHT_DATA_PARALLEL` | `true` | GitHub + Bright Data in parallel when BD key is set |
 | `GITHUB_TOKEN` | — | Optional GitHub PAT for higher rate limits |
 | `LANGSEARCH_API_KEY` | — | Free web search for LinkedIn URL discovery |

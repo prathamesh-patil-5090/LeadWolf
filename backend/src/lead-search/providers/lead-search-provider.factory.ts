@@ -3,7 +3,6 @@ import { BrowserService } from '../browser/browser.service';
 import { LeadSearchProvider } from '../interfaces/lead-search-provider.interface';
 import { BrightDataLinkedInLeadSearchProvider } from './bright-data-linkedin-lead-search.provider';
 import { GithubLeadSearchProvider } from './github-lead-search.provider';
-import { GoogleCseLeadSearchProvider } from './google-cse-lead-search.provider';
 import { MockLeadSearchProvider } from './mock-lead-search.provider';
 import { PlaywrightLeadSearchProvider } from './playwright-lead-search.provider';
 import { BrightDataService } from '../../shared/bright-data/bright-data.service';
@@ -59,14 +58,6 @@ export function createLeadSearchProvider(
     configService.get<string>('BRIGHT_DATA_API_KEY')
   ) {
     return brightDataLinkedInProvider;
-  }
-
-  if (
-    configured === 'google_cse' &&
-    configService.get('GOOGLE_CSE_API_KEY') &&
-    configService.get('GOOGLE_CSE_CX')
-  ) {
-    return new GoogleCseLeadSearchProvider(configService);
   }
 
   if (configured === 'github' || !configured) {
