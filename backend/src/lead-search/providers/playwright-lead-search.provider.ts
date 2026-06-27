@@ -5,6 +5,7 @@ import {
   DiscoveredLead,
   LeadSearchCriteria,
   LeadSearchProvider,
+  wrapSearchResult,
 } from '../interfaces/lead-search-provider.interface';
 import { buildDiscoveryQuery } from '../utils/search-query.builder';
 import {
@@ -20,7 +21,7 @@ export class PlaywrightLeadSearchProvider implements LeadSearchProvider {
 
   constructor(private readonly browserService: BrowserService) {}
 
-  async search(criteria: LeadSearchCriteria): Promise<DiscoveredLead[]> {
+  async search(criteria: LeadSearchCriteria) {
     const query = buildDiscoveryQuery(criteria);
     const browser = await this.browserService.getBrowser();
     const context = await browser.newContext({
@@ -71,7 +72,7 @@ export class PlaywrightLeadSearchProvider implements LeadSearchProvider {
         `Discovered ${leads.length} leads for query "${criteria.query}"`,
       );
 
-      return leads.slice(0, criteria.limit);
+      return wrapSearchResult(leads, criteria);
     } finally {
       await context.close();
     }

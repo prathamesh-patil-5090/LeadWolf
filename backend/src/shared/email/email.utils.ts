@@ -1,3 +1,5 @@
+import { getEmailDomain, isFreeEmailDomain } from './free-email-domains';
+
 export interface DiscoveredContact {
   email: string;
   source: string;
@@ -105,14 +107,29 @@ export function pickEmailForLead(
   }
 
   const firstName = leadName.trim().split(/\s+/)[0]?.toLowerCase();
+  const localPart = (email: string) => email.split('@')[0]?.toLowerCase() ?? '';
+
   if (firstName && firstName.length >= 2) {
-    const nameMatch = contacts.find(
+    const companyNameMatch = contacts.find(
       (entry) =>
-        entry.email.includes(firstName) &&
-        (!companyDomain || entry.email.endsWith(`@${companyDomain}`)),
+        localPart(entry.email).includes(firstName) &&
+        companyDomain &&
+        entry.email.endsWith(`@${companyDomain}`),
     );
-    if (nameMatch) {
-      return nameMatch;
+    if (companyNameMatch) {
+      return companyNameMatch;
+    }
+
+    const freeEmailNameMatch = contacts.find((entry) => {
+      const domain = getEmailDomain(entry.email);
+      return (
+        domain &&
+        isFreeEmailDomain(domain) &&
+        localPart(entry.email).includes(firstName)
+      );
+    });
+    if (freeEmailNameMatch) {
+      return freeEmailNameMatch;
     }
   }
 
@@ -123,6 +140,14 @@ export function pickEmailForLead(
     if (domainMatch) {
       return domainMatch;
     }
+  }
+
+  const freeEmailMatch = contacts.find((entry) => {
+    const domain = getEmailDomain(entry.email);
+    return domain && isFreeEmailDomain(domain);
+  });
+  if (freeEmailMatch) {
+    return freeEmailMatch;
   }
 
   const contactMatch = contacts.find((entry) =>

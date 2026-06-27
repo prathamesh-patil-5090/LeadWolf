@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { Lead } from '../../generated/prisma/client';
 import { LeadCompanyDiscoveryService } from '../lead-company-discovery/lead-company-discovery.service';
 import { LeadContactDiscoveryService } from '../lead-contact-discovery/lead-contact-discovery.service';
+import { LeadContactVerificationService } from '../lead-contact-verification/lead-contact-verification.service';
+import { LeadEmailPersonalizationService } from '../lead-email-personalization/lead-email-personalization.service';
 import { LeadEnrichmentService } from '../lead-enrichment/lead-enrichment.service';
 import { LEAD_PIPELINE_AUTO } from './constants';
 
@@ -15,6 +17,8 @@ export class LeadPipelineService {
     private readonly enrichmentService: LeadEnrichmentService,
     private readonly companyDiscoveryService: LeadCompanyDiscoveryService,
     private readonly contactDiscoveryService: LeadContactDiscoveryService,
+    private readonly contactVerificationService: LeadContactVerificationService,
+    private readonly emailPersonalizationService: LeadEmailPersonalizationService,
   ) {}
 
   isAutoEnabled(): boolean {
@@ -33,12 +37,28 @@ export class LeadPipelineService {
 
     const contactResult =
       await this.contactDiscoveryService.discoverForLead(current);
+    current = contactResult.lead;
+
+    if (current.email) {
+      const verifyResult =
+        await this.contactVerificationService.verifyByLeadId(current.id);
+      current = verifyResult.lead;
+    }
+
+    if (current.verified && current.email) {
+      const emailResult = await this.emailPersonalizationService.generateByLeadId(
+        current.id,
+      );
+      if (!emailResult.skipped) {
+        current = emailResult.lead;
+      }
+    }
 
     this.logger.log(
-      `Pipeline done for lead ${lead.id} → ${contactResult.lead.status}`,
+      `Pipeline done for lead ${lead.id} → ${current.status}`,
     );
 
-    return contactResult.lead;
+    return current;
   }
 
   async processLeads(leads: Lead[]): Promise<Lead[]> {

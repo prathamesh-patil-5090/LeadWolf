@@ -4,6 +4,7 @@ import {
   DiscoveredLead,
   LeadSearchCriteria,
   LeadSearchProvider,
+  wrapSearchResult,
 } from '../interfaces/lead-search-provider.interface';
 import { buildCseDiscoveryQuery } from '../utils/search-query.builder';
 import { mapSearchHitsToLeads } from '../utils/search-results.parser';
@@ -32,7 +33,7 @@ export class GoogleCseLeadSearchProvider implements LeadSearchProvider {
 
   constructor(private readonly configService: ConfigService) {}
 
-  async search(criteria: LeadSearchCriteria): Promise<DiscoveredLead[]> {
+  async search(criteria: LeadSearchCriteria) {
     const apiKey = this.configService.getOrThrow<string>('GOOGLE_CSE_API_KEY');
     const cx = this.configService.getOrThrow<string>('GOOGLE_CSE_CX');
     const query = buildCseDiscoveryQuery(criteria);
@@ -91,7 +92,7 @@ export class GoogleCseLeadSearchProvider implements LeadSearchProvider {
       `Discovered ${leads.length} leads via Google CSE for "${criteria.query}"`,
     );
 
-    return leads.slice(0, criteria.limit);
+    return wrapSearchResult(leads, criteria);
   }
 
   private formatApiError(status: number, body: string): string {

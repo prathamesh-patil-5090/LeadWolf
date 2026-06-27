@@ -4,12 +4,14 @@ import {
   DiscoveredLead,
   LeadSearchCriteria,
   LeadSearchProvider,
+  LeadSearchResult,
 } from '../interfaces/lead-search-provider.interface';
 import {
   resolveSearchRoles,
   TECH_ROLE_PATTERNS,
 } from '../constants/tech-positions';
 import { buildGithubSearchQuery } from '../utils/github-query.builder';
+import { roleCursorKey } from '../utils/search-key.util';
 import {
   normalizeWebsiteUrl,
   parseEmailFromText,
@@ -47,7 +49,7 @@ export class GithubLeadSearchProvider implements LeadSearchProvider {
 
   constructor(private readonly configService: ConfigService) {}
 
-  async search(criteria: LeadSearchCriteria): Promise<DiscoveredLead[]> {
+  async search(criteria: LeadSearchCriteria): Promise<LeadSearchResult> {
     const token = this.configService.get<string>('GITHUB_TOKEN');
     const roles = resolveSearchRoles(criteria);
     const rolesToSearch = roles.length > 0 ? roles : [undefined];
@@ -57,19 +59,26 @@ export class GithubLeadSearchProvider implements LeadSearchProvider {
     );
     const leads: DiscoveredLead[] = [];
     const seen = new Set<string>();
+    const roleEndPages: Record<string, number> = {};
+    let pagesFetched = 0;
+    let skippedExisting = 0;
 
     for (const role of rolesToSearch) {
       if (leads.length >= criteria.limit) {
         break;
       }
 
-      const batchLeads = await this.searchSingleRole(
+      const batchResult = await this.searchSingleRole(
         { ...criteria, role },
         token,
         Math.min(criteria.limit - leads.length, perRoleCap),
       );
 
-      for (const lead of batchLeads) {
+      pagesFetched += batchResult.pagesFetched;
+      skippedExisting += batchResult.skippedExisting;
+      roleEndPages[batchResult.roleKey] = batchResult.nextPage;
+
+      for (const lead of batchResult.leads) {
         if (seen.has(lead.profileUrl)) {
           continue;
         }
@@ -86,30 +95,46 @@ export class GithubLeadSearchProvider implements LeadSearchProvider {
     }
 
     this.logger.log(
-      `Discovered ${leads.length} leads via GitHub (${rolesToSearch.length} role searches) for "${criteria.query}"`,
+      `Discovered ${leads.length} new leads via GitHub (${rolesToSearch.length} role searches, skipped ${skippedExisting} existing) for "${criteria.query}"`,
     );
 
-    return leads.slice(0, criteria.limit);
+    return {
+      leads: leads.slice(0, criteria.limit),
+      roleEndPages,
+      pagesFetched,
+      skippedExisting,
+    };
   }
 
   private async searchSingleRole(
     criteria: LeadSearchCriteria,
     token: string | undefined,
     remaining: number,
-  ): Promise<DiscoveredLead[]> {
+  ): Promise<{
+    leads: DiscoveredLead[];
+    roleKey: string;
+    nextPage: number;
+    pagesFetched: number;
+    skippedExisting: number;
+  }> {
     const query = buildGithubSearchQuery(criteria);
     const leads: DiscoveredLead[] = [];
-    let page = 1;
-    const maxPages = Math.min(2, Math.ceil(remaining / 30));
+    const exclude = new Set(criteria.excludeProfileUrls ?? []);
+    const roleKey = roleCursorKey(criteria.role);
+    let page = criteria.roleStartPages?.[roleKey] ?? 1;
+    let pagesFetched = 0;
+    let skippedExisting = 0;
+    const maxPage = 34;
 
-    while (leads.length < remaining && page <= maxPages) {
+    while (leads.length < remaining && page <= maxPage) {
       const url = new URL('https://api.github.com/search/users');
       url.searchParams.set('q', query);
-      url.searchParams.set('per_page', String(Math.min(30, remaining - leads.length)));
+      url.searchParams.set('per_page', '30');
       url.searchParams.set('page', String(page));
 
       const response = await this.githubFetch(url.toString(), token);
       const body = await response.text();
+      pagesFetched += 1;
 
       if (!response.ok) {
         if (response.status === 403 && body.includes('rate limit')) {
@@ -121,22 +146,38 @@ export class GithubLeadSearchProvider implements LeadSearchProvider {
         this.logger.warn(
           `Skipping role "${criteria.role ?? 'any'}" — GitHub search failed (${response.status})`,
         );
-        return leads;
+        break;
       }
 
       const data = JSON.parse(body) as GithubSearchResponse;
       const users = data.items ?? [];
 
       if (users.length === 0) {
+        page = 1;
         break;
       }
 
+      const newUsers = users.filter((user) => {
+        const profileUrl = `https://github.com/${user.login}`;
+        if (exclude.has(profileUrl)) {
+          skippedExisting += 1;
+          return false;
+        }
+
+        return true;
+      });
+
       const profiles = await Promise.all(
-        users.map((user) => this.fetchEnrichedProfile(user.login, token)),
+        newUsers.map((user) => this.fetchEnrichedProfile(user.login, token)),
       );
 
       for (const profile of profiles) {
         if (!profile) {
+          continue;
+        }
+
+        if (exclude.has(profile.profileUrl)) {
+          skippedExisting += 1;
           continue;
         }
 
@@ -148,9 +189,20 @@ export class GithubLeadSearchProvider implements LeadSearchProvider {
       }
 
       page += 1;
+
+      if (users.length < 30) {
+        page = 1;
+        break;
+      }
     }
 
-    return leads;
+    return {
+      leads,
+      roleKey,
+      nextPage: page,
+      pagesFetched,
+      skippedExisting,
+    };
   }
 
   private pauseBetweenSearches() {

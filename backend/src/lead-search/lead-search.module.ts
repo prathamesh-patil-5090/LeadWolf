@@ -53,11 +53,23 @@ export function bullRootImports() {
   const contactDiscoveryUseQueue =
     (process.env.LEAD_CONTACT_DISCOVERY_SYNC ?? 'true') !== 'true' &&
     Boolean(process.env.REDIS_URL);
+  const contactVerificationUseQueue =
+    (process.env.LEAD_CONTACT_VERIFICATION_SYNC ?? 'true') !== 'true' &&
+    Boolean(process.env.REDIS_URL);
+  const emailPersonalizationUseQueue =
+    (process.env.LEAD_EMAIL_PERSONALIZATION_SYNC ?? 'true') !== 'true' &&
+    Boolean(process.env.REDIS_URL);
+  const campaignSendingUseQueue =
+    (process.env.LEAD_CAMPAIGN_SENDING_SYNC ?? 'true') !== 'true' &&
+    Boolean(process.env.REDIS_URL);
   const useQueue =
     searchUseQueue ||
     enrichmentUseQueue ||
     companyDiscoveryUseQueue ||
-    contactDiscoveryUseQueue;
+    contactDiscoveryUseQueue ||
+    contactVerificationUseQueue ||
+    emailPersonalizationUseQueue ||
+    campaignSendingUseQueue;
 
   if (!useQueue) {
     return [];

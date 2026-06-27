@@ -4,6 +4,7 @@ import {
   DiscoveredLead,
   LeadSearchCriteria,
   LeadSearchProvider,
+  wrapSearchResult,
 } from '../interfaces/lead-search-provider.interface';
 import { buildDiscoveryQuery } from '../utils/search-query.builder';
 import { mapSearchHitsToLeads } from '../utils/search-results.parser';
@@ -26,7 +27,7 @@ export class BraveSearchLeadSearchProvider implements LeadSearchProvider {
 
   constructor(private readonly configService: ConfigService) {}
 
-  async search(criteria: LeadSearchCriteria): Promise<DiscoveredLead[]> {
+  async search(criteria: LeadSearchCriteria) {
     const apiKey = this.configService.getOrThrow<string>('BRAVE_SEARCH_API_KEY');
     const query = buildDiscoveryQuery(criteria);
     const leads: DiscoveredLead[] = [];
@@ -87,6 +88,6 @@ export class BraveSearchLeadSearchProvider implements LeadSearchProvider {
       `Discovered ${leads.length} leads via Brave Search for "${criteria.query}"`,
     );
 
-    return leads.slice(0, criteria.limit);
+    return wrapSearchResult(leads, criteria);
   }
 }

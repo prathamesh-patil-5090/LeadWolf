@@ -70,6 +70,12 @@ Each lead is stored as:
 
 Returns a `LeadSearchJob`. With `LEAD_SEARCH_SYNC=true`, the search runs immediately and leads are stored before the response.
 
+**Repeat searches with the same query** continue from the last GitHub page (stored in `LeadSearchCursor`) and skip profiles already in the database. Job fields:
+
+- `newLeadsFound` — genuinely new leads
+- `skippedExisting` — GitHub results already in DB
+- `leadsFound` — new leads returned this run
+
 ### Get search job status
 
 `GET /api/leads/search/:jobId`
@@ -248,10 +254,12 @@ With `LEAD_CONTACT_DISCOVERY_SYNC=true` (default), runs in-process.
 When `LEAD_PIPELINE_AUTO=true` (default), every lead from search or manual create automatically runs:
 
 ```text
-NEW → ENRICHED → DOMAIN_FOUND → CONTACT_FOUND
+NEW → ENRICHED → DOMAIN_FOUND → CONTACT_FOUND → VERIFIED → EMAIL_GENERATED
 ```
 
-(enrich → discover-company → discover-contacts)
+(enrich → discover-company → discover-contacts → verify → generate-emails)
+
+Grok and OpenRouter run **in parallel**; both drafts are stored in `OutreachEmail`, fastest successful one marked `isPrimary`.
 
 You only need:
 
@@ -261,6 +269,180 @@ POST /api/leads/search
 ```
 
 Set `LEAD_PIPELINE_AUTO=false` to disable and call each step manually.
+
+## Contact Verification
+
+Validates discovered emails before outreach.
+
+Checks:
+
+- **Format** — valid email structure
+- **Disposable** — blocks known throwaway domains
+- **MX records** — domain can receive mail
+- **Domain match** — email domain vs company domain (confidence boost)
+
+### Verify batch
+
+`POST /api/leads/verify`
+
+```json
+{
+  "status": "CONTACT_FOUND",
+  "limit": 10
+}
+```
+
+### Verify one lead
+
+`POST /api/leads/:id/verify`
+
+Example result:
+
+```json
+{
+  "verified": true,
+  "confidence": 80,
+  "email": "founder@rhodawkai.com",
+  "checks": {
+    "format": { "passed": true, "score": 15 },
+    "disposable": { "passed": true, "score": 25 },
+    "mx": { "passed": true, "score": 40, "detail": "aspmx.l.google.com" },
+    "domainMatch": { "passed": true, "score": 20 }
+  },
+  "failures": []
+}
+```
+
+Leads with `verified: true` and `confidence >= 60` move to `VERIFIED` status.
+
+With `LEAD_CONTACT_VERIFICATION_SYNC=true` (default), runs in-process.
+
+## AI Email Personalization
+
+Generates personalized cold emails using **Grok (xAI)** and **OpenRouter** in parallel. Both drafts are saved to `OutreachEmail`; the fastest successful response is marked `isPrimary`.
+
+Uses `Company.summary`, `personalizationHooks`, and lead profile data.
+
+### Generate batch
+
+`POST /api/leads/generate-emails`
+
+```json
+{
+  "status": "VERIFIED",
+  "limit": 5,
+  "regenerate": false
+}
+```
+
+### Generate one lead
+
+`POST /api/leads/:id/generate-email`
+
+Optional body: `{ "regenerate": true }`
+
+### List stored emails
+
+`GET /api/leads/:id/emails`
+
+Example `OutreachEmail` record:
+
+```json
+{
+  "provider": "grok",
+  "model": "grok-3-mini",
+  "subject": "MACS and autonomous bug-fixing at Rhodawk",
+  "body": "Hi Architect89,\n\n...",
+  "isPrimary": true,
+  "latencyMs": 3200
+}
+```
+
+With `LEAD_EMAIL_PERSONALIZATION_SYNC=true` (default), runs in-process.
+
+## Campaign Sending (Brevo)
+
+Sends the primary `OutreachEmail` via Brevo transactional API. Lead status moves to `SENT`.
+
+**Test mode (default on):** when `BREVO_TEST_MODE=true`, all sends go only to `BREVO_TEST_RECIPIENT` — never to the lead's real email.
+
+### Send one lead
+
+`POST /api/leads/:id/send`
+
+```json
+{ "force": false }
+```
+
+### Send batch
+
+`POST /api/leads/send`
+
+```json
+{
+  "status": "EMAIL_GENERATED",
+  "limit": 5
+}
+```
+
+To send to real lead emails in production, set `BREVO_TEST_MODE=false`.
+
+## Analytics (Phase 4)
+
+Tracks email engagement: delivered, opened, clicked, bounced, and replied.
+
+### Summary metrics
+
+`GET /api/analytics/summary`
+
+Returns lead counts, event totals, and open/reply/bounce rates.
+
+### Event log
+
+`GET /api/analytics/events?leadId=...&eventType=OPENED&limit=50`
+
+### Lead timeline
+
+`GET /api/analytics/leads/:id/timeline`
+
+### Brevo webhooks
+
+Register two webhook URLs in [Brevo → Transactional → Webhooks](https://app.brevo.com/):
+
+| URL | Type | Events |
+|-----|------|--------|
+| `https://your-vps/api/webhooks/brevo/transactional` | transactional | `delivered`, `opened`, `click`, `hardBounce`, `softBounce`, `spam` |
+| `https://your-vps/api/webhooks/brevo/inbound` | inbound | `inboundEmailProcessed` |
+
+Optional: set `BREVO_WEBHOOK_SECRET` and pass `Authorization: Bearer <secret>` on webhook calls.
+
+Outbound emails include Brevo `tags` (`lead:{id}`, `outreach:{id}`) and `X-Mailin-custom` header for reliable event matching.
+
+### Reply detection
+
+**Gmail has no free push webhooks.** Replies to a Gmail sender land in your Gmail inbox — Brevo cannot see them unless you use one of these:
+
+| Approach | Cost | How it works |
+|----------|------|--------------|
+| **Gmail API sync** (built-in) | Free | OAuth refresh token; `POST /api/analytics/sync-gmail-replies` polls inbox and matches replies from lead emails |
+| **Brevo inbound parsing** | Free on Brevo | Set `BREVO_REPLY_DOMAIN=reply.yourdomain.com`, point DNS MX to Brevo, use inbound webhook above. Set `Reply-To: lead+{id}@reply.yourdomain.com` (automatic when domain is set) |
+| **Gmail Pub/Sub** | GCP free tier | Advanced: `users.watch` + Cloud Pub/Sub — not implemented here |
+
+For Gmail API sync, create OAuth credentials in Google Cloud Console (Gmail API enabled), obtain a refresh token with `gmail.readonly` scope, then set:
+
+```env
+GMAIL_CLIENT_ID=...
+GMAIL_CLIENT_SECRET=...
+GMAIL_REFRESH_TOKEN=...
+```
+
+Trigger sync manually or via cron:
+
+`POST /api/analytics/sync-gmail-replies`
+
+```json
+{ "limit": 30 }
+```
 
 ## Architecture
 
@@ -300,12 +482,41 @@ Set `LEAD_SEARCH_PROVIDER=mock` for offline development without Playwright.
 | `LEAD_ENRICHMENT_SYNC` | `true` = run enrichment in-process (no Redis)     |
 | `LEAD_COMPANY_DISCOVERY_SYNC` | `true` = run company discovery in-process |
 | `LEAD_CONTACT_DISCOVERY_SYNC` | `true` = run contact discovery in-process |
-| `LEAD_PIPELINE_AUTO` | `true` = auto-run enrich → company → contacts after search |
-| `XAI_API_KEY` | xAI API key for Grok company summaries |
+| `LEAD_PIPELINE_AUTO` | `true` = auto-run full pipeline after search |
+| `LEAD_CONTACT_VERIFICATION_SYNC` | `true` = run verification in-process |
+| `LEAD_EMAIL_PERSONALIZATION_SYNC` | `true` = run email generation in-process |
+| `XAI_API_KEY` | xAI Grok API key |
 | `XAI_MODEL` | Grok model (default `grok-3-mini`) |
+| `OPENROUTER_API_KEY` | OpenRouter API key |
+| `OPENROUTER_MODEL` | Free model e.g. `meta-llama/llama-3.3-70b-instruct:free` |
+| `OUTREACH_SENDER_NAME` | Your name in generated emails |
+| `OUTREACH_SENDER_TITLE` | Your job title in the signature |
+| `OUTREACH_SENDER_COMPANY` | Company name in the signature |
+| `OUTREACH_SENDER_LINKEDIN` | LinkedIn URL in the signature |
+| `OUTREACH_SENDER_GITHUB` | GitHub URL in the signature |
+| `OUTREACH_SENDER_WHATSAPP` | WhatsApp number in the signature |
+| `OUTREACH_SENDER_EMAIL` | Contact email in the signature |
+| `OUTREACH_SENDER_PITCH` | One-line pitch about what you are building |
+| `BREVO_API_KEY` | Brevo transactional email API key |
+| `BREVO_TEST_MODE` | `true` = send only to test recipient (safe default) |
+| `BREVO_TEST_RECIPIENT` | Test inbox while `BREVO_TEST_MODE=true` |
+| `LEAD_CAMPAIGN_SENDING_SYNC` | `true` = send in-process |
+| `BREVO_REPLY_DOMAIN` | Subdomain for Brevo inbound reply routing (e.g. `reply.yourdomain.com`) |
+| `BREVO_WEBHOOK_SECRET` | Optional bearer token for webhook auth |
+| `GMAIL_CLIENT_ID` | Google OAuth client ID for Gmail reply sync |
+| `GMAIL_CLIENT_SECRET` | Google OAuth client secret |
+| `GMAIL_REFRESH_TOKEN` | Gmail API refresh token (`gmail.readonly`) |
+| `GMAIL_REPLY_QUERY` | Gmail search query (default `in:inbox newer_than:30d`) |
 | `LEAD_SEARCH_PROVIDER` | `github` (default, free), `playwright`, `mock`, `brave`, `google_cse` |
 | `GITHUB_TOKEN` | Optional free GitHub PAT for higher API rate limits |
 | `BRAVE_SEARCH_API_KEY` | Optional paid Brave Search API key |
 | `GOOGLE_CSE_CX`        | Google Programmable Search Engine ID              |
 | `PLAYWRIGHT_HEADLESS`  | `true` to run browser headless (default)          |
 | `PORT`                 | API port (default 3001)                           |
+| `GROQ_RATE_LIMIT_RPM` | Groq requests/min (default `30`) |
+| `GROQ_RATE_LIMIT_RPD` | Groq requests/day (default `1000`) |
+| `OPENROUTER_RATE_LIMIT_RPM` | OpenRouter requests/min (default `20`) |
+| `BREVO_RATE_LIMIT_RPD` | Brevo sends/day (default `300`) |
+| `LEAD_PIPELINE_MAX_LEADS_PER_SEARCH` | Max new leads auto-pipelined per search (default `25`) |
+
+Check live quota usage: `GET /api/analytics/quota`

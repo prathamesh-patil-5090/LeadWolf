@@ -18,6 +18,19 @@ enum LeadStatus {
   SENT
   OPENED
   REPLIED
+  BOUNCED
+}
+
+enum EmailEventType {
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  SOFT_BOUNCE
+  SPAM
+  UNSUBSCRIBED
+  REPLIED
 }
 
 enum LeadSearchJobStatus {
@@ -44,11 +57,15 @@ model Lead {
   emailSource     String?
   discoveredContacts Json?
   verified        Boolean    @default(false)
+  contactConfidence Int?
+  verificationDetails Json?
   status          LeadStatus @default(NEW)
   companyId       String?
   companyRecord   Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
   searchJobId     String?
   searchJob       LeadSearchJob? @relation(fields: [searchJobId], references: [id], onDelete: SetNull)
+  outreachEmails  OutreachEmail[]
+  emailEvents     EmailEvent[]
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
@@ -79,6 +96,59 @@ model Company {
   @@index([name])
 }
 
+model OutreachEmail {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  provider  String
+  model     String
+  subject   String
+  body      String   @db.Text
+  isPrimary Boolean  @default(false)
+  latencyMs Int?
+  error     String?
+  sentAt    DateTime?
+  sentTo    String?
+  brevoMessageId String?
+  sendError String?
+  emailEvents   EmailEvent[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId])
+  @@index([leadId, isPrimary])
+}
+
+model EmailEvent {
+  id              String         @id @default(cuid())
+  outreachEmailId String?
+  outreachEmail   OutreachEmail? @relation(fields: [outreachEmailId], references: [id], onDelete: SetNull)
+  leadId          String?
+  lead            Lead?          @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  eventType       EmailEventType
+  source          String
+  externalId      String?
+  recipientEmail  String?
+  payload         Json?
+  occurredAt      DateTime
+  createdAt       DateTime       @default(now())
+
+  @@unique([source, externalId])
+  @@index([leadId])
+  @@index([outreachEmailId])
+  @@index([eventType])
+  @@index([occurredAt])
+}
+
+model LeadSearchCursor {
+  id           String   @id @default(cuid())
+  searchKey    String   @unique
+  rolePages    Json     @default("{}")
+  totalFetched Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 model LeadSearchJob {
   id         String              @id @default(cuid())
   query      String
@@ -90,6 +160,8 @@ model LeadSearchJob {
   limit      Int                 @default(25)
   status     LeadSearchJobStatus @default(PENDING)
   leadsFound Int                 @default(0)
+  newLeadsFound Int              @default(0)
+  skippedExisting Int            @default(0)
   error      String?
   leads      Lead[]
   createdAt  DateTime            @default(now())

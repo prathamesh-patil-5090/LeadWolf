@@ -13,6 +13,7 @@ import {
   DiscoveredLead,
 } from './interfaces/lead-search-provider.interface';
 import { LeadPipelineService } from '../lead-pipeline/lead-pipeline.service';
+import { buildSearchKey } from './utils/search-key.util';
 
 @Injectable()
 export class LeadSearchService {
@@ -85,7 +86,26 @@ export class LeadSearchService {
     });
 
     try {
-      const discovered = await this.searchProvider.search({
+      const searchKey = buildSearchKey({
+        query: job.query,
+        role: job.role,
+        roles: job.roles,
+        location: job.location,
+        company: job.company,
+        expandTechRoles: job.expandTechRoles,
+      });
+
+      const [cursor, existingLeads] = await Promise.all([
+        this.prisma.leadSearchCursor.findUnique({ where: { searchKey } }),
+        this.prisma.lead.findMany({ select: { profileUrl: true } }),
+      ]);
+
+      const roleStartPages =
+        cursor?.rolePages && typeof cursor.rolePages === 'object'
+          ? (cursor.rolePages as Record<string, number>)
+          : {};
+
+      const searchResult = await this.searchProvider.search({
         query: job.query,
         role: job.role ?? undefined,
         roles: job.roles.length > 0 ? job.roles : undefined,
@@ -93,15 +113,35 @@ export class LeadSearchService {
         location: job.location ?? undefined,
         company: job.company ?? undefined,
         limit: job.limit,
+        excludeProfileUrls: existingLeads.map((lead) => lead.profileUrl),
+        roleStartPages,
       });
 
-      await this.persistDiscoveredLeads(jobId, discovered);
+      await this.prisma.leadSearchCursor.upsert({
+        where: { searchKey },
+        create: {
+          searchKey,
+          rolePages: searchResult.roleEndPages,
+          totalFetched: searchResult.leads.length,
+        },
+        update: {
+          rolePages: searchResult.roleEndPages,
+          totalFetched: { increment: searchResult.leads.length },
+        },
+      });
+
+      const persistStats = await this.persistDiscoveredLeads(
+        jobId,
+        searchResult.leads,
+      );
 
       return this.prisma.leadSearchJob.update({
         where: { id: jobId },
         data: {
           status: LeadSearchJobStatus.COMPLETED,
-          leadsFound: discovered.length,
+          leadsFound: searchResult.leads.length,
+          newLeadsFound: persistStats.newLeads,
+          skippedExisting: searchResult.skippedExisting + persistStats.updatedLeads,
         },
       });
     } catch (error) {
@@ -202,10 +242,16 @@ export class LeadSearchService {
     jobId: string,
     discovered: DiscoveredLead[],
   ) {
-    const savedLeads: Lead[] = [];
+    const newLeads: Lead[] = [];
+    let updatedLeads = 0;
+    const pipelineCap = this.readPipelineCap();
 
     for (const lead of discovered) {
       const githubUrl = lead.githubUrl ?? this.extractGithubUrl(lead.profileUrl);
+      const existing = await this.prisma.lead.findUnique({
+        where: { profileUrl: lead.profileUrl },
+        select: { id: true },
+      });
 
       const saved = await this.prisma.lead.upsert({
         where: { profileUrl: lead.profileUrl },
@@ -239,10 +285,34 @@ export class LeadSearchService {
         },
       });
 
-      savedLeads.push(saved);
+      if (!existing) {
+        newLeads.push(saved);
+      } else {
+        updatedLeads += 1;
+      }
     }
 
-    await this.runPipelineForLeads(savedLeads);
+    const leadsForPipeline = newLeads.slice(0, pipelineCap);
+    if (newLeads.length > pipelineCap) {
+      this.logger.warn(
+        `Pipeline cap ${pipelineCap} reached — ${newLeads.length - pipelineCap} new lead(s) saved without auto-pipeline`,
+      );
+    }
+
+    await this.runPipelineForLeads(leadsForPipeline);
+
+    return {
+      newLeads: newLeads.length,
+      updatedLeads,
+      pipelined: leadsForPipeline.length,
+    };
+  }
+
+  private readPipelineCap() {
+    const value = Number(
+      this.configService.get<string>('LEAD_PIPELINE_MAX_LEADS_PER_SEARCH', '25'),
+    );
+    return Number.isFinite(value) && value > 0 ? value : 25;
   }
 
   private async runPipelineForLead(lead: Lead) {
