@@ -22,6 +22,7 @@ export default function PipelinePage() {
   const [logs, setLogs] = useState<PipelineLogs | null>(null);
   const [loading, setLoading] = useState(true);
   const [retryingAll, setRetryingAll] = useState(false);
+  const [retryingPending, setRetryingPending] = useState(false);
   const [retryingLeadId, setRetryingLeadId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -40,6 +41,21 @@ export default function PipelinePage() {
     const t = setInterval(() => void load(), 5000);
     return () => clearInterval(t);
   }, [load]);
+
+  async function retryAllPending() {
+    setRetryingPending(true);
+    try {
+      const result = await api.retryPending(100);
+      toast.success(
+        `Queued ${result.requeued ?? 0} pending lead(s) (${result.alreadyInQueue ?? 0} already in queue)`,
+      );
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to queue pending leads');
+    } finally {
+      setRetryingPending(false);
+    }
+  }
 
   async function retryAllFailed() {
     setRetryingAll(true);
@@ -79,6 +95,17 @@ export default function PipelinePage() {
             <Button variant="outline" size="sm" onClick={() => void load()}>
               <RefreshCw className="mr-1 size-4" />
               Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={retryingPending}
+              onClick={() => void retryAllPending()}
+            >
+              {retryingPending ? (
+                <Loader2 className="mr-1 size-4 animate-spin" />
+              ) : null}
+              Queue pending
             </Button>
             <Button
               size="sm"
@@ -140,12 +167,27 @@ export default function PipelinePage() {
                 <LogCard
                   title="Pending & in progress"
                   description="Leads waiting in BullMQ (waiting, active, delayed) or progressing through pipeline steps in the database."
+                  actions={
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={retryingPending || (logs?.pending.length ?? 0) === 0}
+                      onClick={() => void retryAllPending()}
+                    >
+                      {retryingPending ? (
+                        <Loader2 className="mr-1 size-4 animate-spin" />
+                      ) : null}
+                      Queue all not queued
+                    </Button>
+                  }
                 >
                   {logs ? (
                     <PipelineLogsTable
                       entries={logs.pending}
                       stepLabels={logs.stepLabels}
                       variant="pending"
+                      onRetry={(id) => void retryLead(id)}
+                      retryingId={retryingLeadId}
                     />
                   ) : null}
                 </LogCard>
@@ -226,16 +268,23 @@ function LogCard({
   title,
   description,
   children,
+  actions,
 }: {
   title: string;
   description: string;
   children: ReactNode;
+  actions?: ReactNode;
 }) {
   return (
     <Card className="mt-4">
       <CardHeader>
-        <CardTitle>{title}</CardTitle>
-        <CardDescription>{description}</CardDescription>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <CardTitle>{title}</CardTitle>
+            <CardDescription>{description}</CardDescription>
+          </div>
+          {actions}
+        </div>
       </CardHeader>
       <CardContent className="overflow-x-auto p-0 pb-2">{children}</CardContent>
     </Card>

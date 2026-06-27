@@ -37,4 +37,11 @@ export class LeadPipelineController {
       limit ? Number(limit) : 25,
     );
   }
+
+  @Post('retry-pending')
+  retryPending(@Query('limit') limit?: string) {
+    return this.pipelineQueueService.retryPendingLeads(
+      limit ? Math.min(Number(limit), 200) : 50,
+    );
+  }
 }

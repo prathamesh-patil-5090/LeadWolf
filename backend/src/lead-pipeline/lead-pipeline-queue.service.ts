@@ -22,6 +22,7 @@ import {
   isPipelineCompletedStatus,
   isPipelineFailedStatus,
   isPipelineInProgressStatus,
+  PIPELINE_IN_PROGRESS_STATUSES,
   pipelineProgressForLead,
 } from './pipeline-step.util';
 
@@ -386,6 +387,65 @@ export class LeadPipelineQueueService implements OnModuleInit, OnModuleDestroy {
     this.logger.log(`Retried ${retried} failed pipeline job(s) in Redis`);
 
     return { retried, jobIds: failedJobs.map((job) => job.id) };
+  }
+
+  async retryPendingLeads(limit = 50) {
+    const queuedLeadIds = await this.collectQueuedLeadIds(limit);
+
+    const leads = await this.prisma.lead.findMany({
+      where: {
+        status: { in: PIPELINE_IN_PROGRESS_STATUSES },
+        ...(queuedLeadIds.size > 0
+          ? { id: { notIn: [...queuedLeadIds] } }
+          : {}),
+      },
+      orderBy: { updatedAt: 'asc' },
+      take: limit,
+      select: { id: true },
+    });
+
+    const results = [];
+    for (const lead of leads) {
+      results.push(await this.enqueueLead(lead.id));
+    }
+
+    const requeued = results.filter(
+      (result) =>
+        result.action === 'enqueued' || result.action === 'retried_failed',
+    ).length;
+
+    this.logger.log(
+      `Re-queued ${requeued} pending lead(s) (${queuedLeadIds.size} already in queue)`,
+    );
+
+    return {
+      scanned: leads.length,
+      alreadyInQueue: queuedLeadIds.size,
+      requeued,
+      results,
+    };
+  }
+
+  private async collectQueuedLeadIds(limit: number) {
+    const ids = new Set<string>();
+    if (!this.pipelineQueue) {
+      return ids;
+    }
+
+    const [waiting, active, delayed] = await Promise.all([
+      this.pipelineQueue.getWaiting(0, limit - 1),
+      this.pipelineQueue.getActive(0, limit - 1),
+      this.pipelineQueue.getDelayed(0, limit - 1),
+    ]);
+
+    for (const job of [...waiting, ...active, ...delayed]) {
+      const leadId = (job.data as PipelineJobPayload).leadId;
+      if (leadId) {
+        ids.add(leadId);
+      }
+    }
+
+    return ids;
   }
 
   async retryFailedLeads(limit = 25) {
