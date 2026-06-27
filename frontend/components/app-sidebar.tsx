@@ -1,35 +1,16 @@
 'use client';
 
-import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  Building2,
-  LayoutDashboard,
-  ListTodo,
-  Mail,
-  Search,
-  Settings,
-  Users,
-} from 'lucide-react';
+import { APP_NAV } from '@/lib/app-nav';
 import { cn } from '@/lib/utils';
-
-const nav = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/search', label: 'Search', icon: Search },
-  { href: '/leads', label: 'Leads', icon: Users },
-  { href: '/sent-emails', label: 'Sent emails', icon: Mail },
-  { href: '/pipeline', label: 'Pipeline', icon: ListTodo },
-  { href: '/companies', label: 'Companies', icon: Building2 },
-  { href: '/settings', label: 'Settings', icon: Settings },
-];
 
 export function AppSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground">
+    <aside className="hidden w-56 shrink-0 flex-col border-r bg-sidebar text-sidebar-foreground md:flex">
       <Link
         href="/dashboard"
         className="flex h-14 items-center gap-2.5 border-b px-4 transition-colors hover:bg-sidebar-accent/40"
@@ -45,7 +26,7 @@ export function AppSidebar() {
         <span className="font-semibold tracking-tight">LeadWolf</span>
       </Link>
       <nav className="flex flex-1 flex-col gap-1 p-3">
-        {nav.map(({ href, label, icon: Icon }) => {
+        {APP_NAV.map(({ href, label, icon: Icon }) => {
           const active =
             pathname === href || pathname.startsWith(`${href}/`);
           return (
@@ -65,8 +46,10 @@ export function AppSidebar() {
           );
         })}
       </nav>
-      <div className="border-t p-3 text-xs text-muted-foreground">
-        API: {process.env.NEXT_PUBLIC_API_URL ?? 'localhost:3001/api'}
+      <div className="hidden border-t p-3 text-xs text-muted-foreground lg:block">
+        <p className="truncate" title={process.env.NEXT_PUBLIC_API_URL}>
+          API: {process.env.NEXT_PUBLIC_API_URL ?? 'localhost:3001/api'}
+        </p>
       </div>
     </aside>
   );

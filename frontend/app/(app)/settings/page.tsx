@@ -71,7 +71,7 @@ export default function SettingsPage() {
         description="Danger zone — destructive actions for local development"
       />
 
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         {!status?.resetEnabled ? (
           <Card className="border-amber-500/40 bg-amber-500/5">
             <CardHeader>

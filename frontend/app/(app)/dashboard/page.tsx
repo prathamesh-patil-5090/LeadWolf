@@ -37,7 +37,7 @@ export default async function DashboardPage() {
         description="Outreach pipeline overview and API quotas"
         actions={<DashboardActions />}
       />
-      <div className="space-y-6 p-6">
+      <div className="space-y-6 p-4 sm:p-6">
         {error ? (
           <Card className="border-destructive">
             <CardHeader>
@@ -82,7 +82,7 @@ export default async function DashboardPage() {
                     : 'Sync mode — queue disabled'}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="grid grid-cols-3 gap-4 text-sm">
+              <CardContent className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
                 <Stat label="Waiting" value={pipeline.waiting} />
                 <Stat label="Active" value={pipeline.active} />
                 <Stat label="Failed" value={pipeline.failed} highlight={pipeline.failed > 0} />

@@ -116,7 +116,7 @@ export default function LeadDetailPage() {
     return (
       <>
         <PageHeader title="Lead not found" backHref="/leads" backLabel="Back to leads" />
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           <p className="text-muted-foreground">This lead does not exist or was removed.</p>
         </div>
       </>
@@ -138,7 +138,7 @@ export default function LeadDetailPage() {
         backHref="/leads"
         backLabel="Back to leads"
       />
-      <div className="grid gap-6 p-6 lg:grid-cols-3">
+      <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <Card>
             <CardHeader>
@@ -170,7 +170,7 @@ export default function LeadDetailPage() {
           ) : null}
 
           <Tabs defaultValue="email">
-            <TabsList>
+            <TabsList className="h-auto w-full max-w-full flex-wrap justify-start gap-1 sm:w-fit sm:flex-nowrap">
               <TabsTrigger value="email">Outreach email</TabsTrigger>
               <TabsTrigger value="timeline">Timeline</TabsTrigger>
             </TabsList>
@@ -225,7 +225,10 @@ export default function LeadDetailPage() {
                   ) : (
                     <ul className="space-y-3">
                       {timeline.events.map((ev) => (
-                        <li key={ev.id} className="flex justify-between text-sm">
+                        <li
+                          key={ev.id}
+                          className="flex flex-col gap-0.5 text-sm sm:flex-row sm:justify-between"
+                        >
                           <span className="font-medium">{ev.eventType}</span>
                           <span className="text-muted-foreground">
                             {new Date(ev.occurredAt).toLocaleString()}

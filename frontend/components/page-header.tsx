@@ -17,7 +17,7 @@ export function PageHeader({
   backLabel?: string;
 }) {
   return (
-    <div className="border-b bg-background px-6 py-5">
+    <div className="border-b bg-background px-4 py-4 sm:px-6 sm:py-5">
       {backHref ? (
         <Link
           href={backHref}
@@ -32,13 +32,13 @@ export function PageHeader({
       ) : null}
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{title}</h1>
           {description ? (
             <p className="mt-1 text-sm text-muted-foreground">{description}</p>
           ) : null}
         </div>
         {actions ? (
-          <div className="mt-3 flex gap-2 sm:mt-0">{actions}</div>
+          <div className="mt-3 flex flex-wrap gap-2 sm:mt-0">{actions}</div>
         ) : null}
       </div>
     </div>
