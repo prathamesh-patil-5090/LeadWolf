@@ -88,4 +88,28 @@ describe('search-query.builder', () => {
       }),
     ).toBe('site:linkedin.com/in CTO AI Startups India');
   });
+
+  it('dedupes repeated role and location terms', async () => {
+    const { buildDiscoveryQuery, buildLangSearchQuery } = await import(
+      './search-query.builder'
+    );
+
+    expect(
+      buildDiscoveryQuery({
+        query: 'AI startup',
+        role: 'Founder',
+        location: 'India',
+        limit: 10,
+      }),
+    ).toBe('site:linkedin.com/in AI startup Founder India');
+
+    expect(
+      buildLangSearchQuery({
+        query: 'AI startup',
+        role: 'Founder',
+        location: 'India',
+        limit: 10,
+      }),
+    ).toBe('LinkedIn profile Founder AI startup India');
+  });
 });

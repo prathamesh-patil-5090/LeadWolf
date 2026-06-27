@@ -12,6 +12,7 @@ import { LeadEmailPersonalizationModule } from './lead-email-personalization/lea
 import { LeadCampaignSendingModule } from './lead-campaign-sending/lead-campaign-sending.module';
 import { LeadAnalyticsModule } from './lead-analytics/lead-analytics.module';
 import { LeadPipelineModule } from './lead-pipeline/lead-pipeline.module';
+import { BrightDataModule } from './shared/bright-data/bright-data.module';
 import { RateLimitModule } from './shared/rate-limit/rate-limit.module';
 import { PrismaModule } from './prisma/prisma.module';
 
@@ -19,6 +20,7 @@ import { PrismaModule } from './prisma/prisma.module';
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
     RateLimitModule,
+    BrightDataModule,
     ...bullRootImports(),
     PrismaModule,
     LeadPipelineModule.register(),

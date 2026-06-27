@@ -6,7 +6,6 @@ import { LEAD_EMAIL_PERSONALIZATION_QUEUE } from './constants';
 import { LeadEmailPersonalizationController } from './lead-email-personalization.controller';
 import { LeadEmailPersonalizationProcessor } from './lead-email-personalization.processor';
 import { LeadEmailPersonalizationService } from './lead-email-personalization.service';
-import { GrokEmailGenerator } from './providers/grok-email.generator';
 import { GroqEmailGenerator } from './providers/groq-email.generator';
 import { OpenRouterEmailGenerator } from './providers/openrouter-email.generator';
 import { SplitEmailGenerationService } from './services/split-email-generation.service';
@@ -31,7 +30,6 @@ export class LeadEmailPersonalizationModule {
       providers: [
         LeadEmailPersonalizationService,
         SplitEmailGenerationService,
-        GrokEmailGenerator,
         GroqEmailGenerator,
         OpenRouterEmailGenerator,
         ...(useQueue ? [LeadEmailPersonalizationProcessor] : []),

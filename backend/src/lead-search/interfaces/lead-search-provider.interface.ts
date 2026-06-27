@@ -7,6 +7,7 @@ export interface DiscoveredLead {
   website?: string;
   githubUrl?: string;
   linkedinUrl?: string;
+  location?: string;
 }
 
 export interface LeadSearchCriteria {
@@ -19,6 +20,8 @@ export interface LeadSearchCriteria {
   limit: number;
   excludeProfileUrls?: string[];
   roleStartPages?: Record<string, number>;
+  /** Extra LinkedIn profile URLs to scrape (e.g. from GitHub leads). */
+  seedLinkedInUrls?: string[];
 }
 
 export interface LeadSearchResult {

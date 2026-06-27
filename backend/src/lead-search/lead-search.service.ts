@@ -261,10 +261,11 @@ export class LeadSearchService {
           company: lead.company,
           email: lead.email,
           website: lead.website,
+          location: lead.location,
           githubUrl,
           linkedinUrl: lead.linkedinUrl,
           searchJobId: jobId,
-          ...(lead.email || lead.website || lead.linkedinUrl
+          ...(lead.email || lead.website || lead.linkedinUrl || lead.location
             ? { status: LeadStatus.ENRICHED }
             : {}),
         },
@@ -275,11 +276,12 @@ export class LeadSearchService {
           profileUrl: lead.profileUrl,
           email: lead.email,
           website: lead.website,
+          location: lead.location,
           githubUrl,
           linkedinUrl: lead.linkedinUrl,
           searchJobId: jobId,
           status:
-            lead.email || lead.website || lead.linkedinUrl
+            lead.email || lead.website || lead.linkedinUrl || lead.location
               ? LeadStatus.ENRICHED
               : LeadStatus.NEW,
         },

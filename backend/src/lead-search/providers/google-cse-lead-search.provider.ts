@@ -101,7 +101,7 @@ export class GoogleCseLeadSearchProvider implements LeadSearchProvider {
       const message = parsed.error?.message;
 
       if (status === 403 && message?.includes('Custom Search JSON API')) {
-        return 'Google Custom Search JSON API is not available for new Google Cloud projects (closed to new customers since Jan 2026). Use Brave Search instead: set BRAVE_SEARCH_API_KEY and LEAD_SEARCH_PROVIDER=brave. See https://programmablesearchengine.googleblog.com/2026/01/updates-to-our-web-search-products.html';
+        return 'Google Custom Search JSON API is not available for new Google Cloud projects (closed to new customers since Jan 2026). Use LangSearch instead: set LANGSEARCH_API_KEY. See https://programmablesearchengine.googleblog.com/2026/01/updates-to-our-web-search-products.html';
       }
 
       if (message) {

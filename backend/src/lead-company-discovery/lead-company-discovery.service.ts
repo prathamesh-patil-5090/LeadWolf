@@ -14,7 +14,6 @@ import { DiscoverCompanyDto } from './dto/discover-company.dto';
 import { CompanyScrapeResult } from './interfaces/company-discovery.interface';
 import { CompanyDomainResolver } from './services/company-domain.resolver';
 import { CompanyWebsiteScraper } from './services/company-website.scraper';
-import { GrokSummarizerService } from './services/grok-summarizer.service';
 import {
   normalizeDiscoveredContacts,
   parseStoredDiscoveredContacts,
@@ -29,7 +28,6 @@ export class LeadCompanyDiscoveryService {
     private readonly configService: ConfigService,
     private readonly domainResolver: CompanyDomainResolver,
     private readonly websiteScraper: CompanyWebsiteScraper,
-    private readonly grokSummarizer: GrokSummarizerService,
     @Optional()
     @InjectQueue(LEAD_COMPANY_DISCOVERY_QUEUE)
     private readonly discoveryQueue?: Queue,
@@ -108,7 +106,7 @@ export class LeadCompanyDiscoveryService {
     };
   }
 
-  async discoverForLead(lead: Lead, resummarize = false) {
+  async discoverForLead(lead: Lead, _resummarize = false) {
     const website = await this.domainResolver.resolve(
       lead.company,
       lead.companyWebsite,
@@ -131,32 +129,25 @@ export class LeadCompanyDiscoveryService {
     }
 
     const company = await this.upsertCompany(lead, scrapeResult);
-    const summarizedCompany = await this.maybeSummarize(
-      company,
-      lead,
-      scrapeResult.textContent,
-      scrapeResult.website,
-      resummarize,
-    );
 
-    const status = this.resolveStatus(summarizedCompany, lead.status);
+    const status = this.resolveStatus(company, lead.status);
 
     const updatedLead = await this.prisma.lead.update({
       where: { id: lead.id },
       data: {
-        companyId: summarizedCompany.id,
+        companyId: company.id,
         companyWebsite: scrapeResult.website,
         status,
       },
     });
 
     this.logger.log(
-      `Company discovery for lead ${lead.id} → ${status} (${summarizedCompany.domain})`,
+      `Company discovery for lead ${lead.id} → ${status} (${company.domain})`,
     );
 
     return {
       lead: updatedLead,
-      company: summarizedCompany,
+      company,
       emailsFound: scrapeResult.emails.length,
       skipped: false,
     };
@@ -191,49 +182,6 @@ export class LeadCompanyDiscoveryService {
         scrapedContent: scrapeResult.textContent,
         discoveredEmails: emails,
         discoveredAt: new Date(),
-      },
-    });
-  }
-
-  private async maybeSummarize(
-    company: {
-      id: string;
-      summary: string | null;
-      domain: string;
-    },
-    lead: Lead,
-    scrapedContent: string,
-    website: string,
-    resummarize: boolean,
-  ) {
-    if (company.summary && !resummarize) {
-      return company;
-    }
-
-    if (!scrapedContent.trim()) {
-      return company;
-    }
-
-    const summary = await this.grokSummarizer.summarize({
-      companyName: lead.company,
-      leadRole: lead.role,
-      website,
-      scrapedContent,
-    });
-
-    if (!summary) {
-      return company;
-    }
-
-    return this.prisma.company.update({
-      where: { id: company.id },
-      data: {
-        summary: summary.summary,
-        industry: summary.industry,
-        products: summary.products,
-        personalizationHooks:
-          summary.personalizationHooks as unknown as Prisma.InputJsonValue,
-        summarizedAt: new Date(),
       },
     });
   }

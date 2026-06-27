@@ -6,6 +6,7 @@ import { Lead, LeadStatus } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { LEAD_ENRICHMENT_QUEUE } from './constants';
 import { CompanyDomainEnricher } from './enrichers/company-domain.enricher';
+import { BrightDataLinkedInEnricher } from './enrichers/bright-data-linkedin.enricher';
 import { GithubProfileEnricher } from './enrichers/github-profile.enricher';
 import { WebsiteEnricher } from './enrichers/website.enricher';
 import { EnrichLeadsDto } from './dto/enrich-leads.dto';
@@ -19,6 +20,7 @@ export class LeadEnrichmentService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly githubEnricher: GithubProfileEnricher,
+    private readonly brightDataLinkedInEnricher: BrightDataLinkedInEnricher,
     private readonly websiteEnricher: WebsiteEnricher,
     private readonly companyDomainEnricher: CompanyDomainEnricher,
     @Optional()
@@ -73,6 +75,14 @@ export class LeadEnrichmentService {
     let data = this.leadToEnrichmentData(lead);
 
     data = this.applyPatch(data, await this.githubEnricher.enrich(lead));
+    data = this.applyPatch(
+      data,
+      await this.brightDataLinkedInEnricher.enrich({
+        ...lead,
+        linkedinUrl: data.linkedinUrl ?? lead.linkedinUrl,
+        profileUrl: lead.profileUrl,
+      }),
+    );
     data = this.applyPatch(data, await this.websiteEnricher.enrich({
       ...lead,
       website: data.website ?? lead.website,

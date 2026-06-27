@@ -1,12 +1,18 @@
 import { DynamicModule, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bullmq';
+import { BrightDataModule } from '../shared/bright-data/bright-data.module';
+import { BrightDataService } from '../shared/bright-data/bright-data.service';
 import { BrowserService } from './browser/browser.service';
 import { LEAD_SEARCH_PROVIDER, LEAD_SEARCH_QUEUE } from './constants';
 import { LeadSearchController } from './lead-search.controller';
 import { LeadSearchProcessor } from './lead-search.processor';
 import { LeadSearchService } from './lead-search.service';
+import { BrightDataLinkedInLeadSearchProvider } from './providers/bright-data-linkedin-lead-search.provider';
+import { CombinedLeadSearchProvider } from './providers/combined-lead-search.provider';
+import { GithubLeadSearchProvider } from './providers/github-lead-search.provider';
 import { createLeadSearchProvider } from './providers/lead-search-provider.factory';
+import { LinkedInUrlDiscoveryService } from './services/linkedin-url-discovery.service';
 
 @Module({})
 export class LeadSearchModule {
@@ -18,6 +24,7 @@ export class LeadSearchModule {
     return {
       module: LeadSearchModule,
       imports: [
+        BrightDataModule,
         ...(useQueue
           ? [BullModule.registerQueue({ name: LEAD_SEARCH_QUEUE })]
           : []),
@@ -26,10 +33,21 @@ export class LeadSearchModule {
       providers: [
         LeadSearchService,
         BrowserService,
+        GithubLeadSearchProvider,
+        LinkedInUrlDiscoveryService,
+        BrightDataLinkedInLeadSearchProvider,
+        CombinedLeadSearchProvider,
         ...(useQueue ? [LeadSearchProcessor] : []),
         {
           provide: LEAD_SEARCH_PROVIDER,
-          inject: [ConfigService, BrowserService],
+          inject: [
+            ConfigService,
+            BrowserService,
+            BrightDataService,
+            CombinedLeadSearchProvider,
+            LinkedInUrlDiscoveryService,
+            BrightDataLinkedInLeadSearchProvider,
+          ],
           useFactory: createLeadSearchProvider,
         },
       ],

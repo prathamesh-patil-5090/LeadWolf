@@ -6,7 +6,6 @@ import { LeadCompanyDiscoveryProcessor } from './lead-company-discovery.processo
 import { LeadCompanyDiscoveryService } from './lead-company-discovery.service';
 import { CompanyDomainResolver } from './services/company-domain.resolver';
 import { CompanyWebsiteScraper } from './services/company-website.scraper';
-import { GrokSummarizerService } from './services/grok-summarizer.service';
 
 @Module({})
 export class LeadCompanyDiscoveryModule {
@@ -25,7 +24,6 @@ export class LeadCompanyDiscoveryModule {
         LeadCompanyDiscoveryService,
         CompanyDomainResolver,
         CompanyWebsiteScraper,
-        GrokSummarizerService,
         ...(useQueue ? [LeadCompanyDiscoveryProcessor] : []),
       ],
       exports: [LeadCompanyDiscoveryService],

@@ -31,7 +31,6 @@ export class GroqEmailGenerator {
     );
     const apiKey = resolveGroqApiKey(
       this.configService.get<string>('GROQ_API_KEY'),
-      this.configService.get<string>('XAI_API_KEY'),
     );
 
     if (!apiKey) {

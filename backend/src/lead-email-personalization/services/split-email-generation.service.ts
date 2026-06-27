@@ -71,10 +71,7 @@ export class SplitEmailGenerationService {
   private isProviderConfigured(provider: SplitEmailProvider) {
     if (provider === 'groq') {
       return Boolean(
-        resolveGroqApiKey(
-          this.configService.get<string>('GROQ_API_KEY'),
-          this.configService.get<string>('XAI_API_KEY'),
-        ),
+        resolveGroqApiKey(this.configService.get<string>('GROQ_API_KEY')),
       );
     }
 
