@@ -11,6 +11,13 @@ export class LeadPipelineController {
     return this.pipelineQueueService.getQueueStatus();
   }
 
+  @Get('logs')
+  getPipelineLogs(@Query('limit') limit?: string) {
+    return this.pipelineQueueService.getPipelineLogs(
+      limit ? Math.min(Number(limit), 200) : 50,
+    );
+  }
+
   @Post('queue/enqueue/:leadId')
   enqueueLead(
     @Param('leadId') leadId: string,

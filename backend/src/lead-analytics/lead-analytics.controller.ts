@@ -1,5 +1,13 @@
-import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
-import { EmailEventType } from '../../generated/prisma/client';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { EmailEventType, LeadStatus } from '../../generated/prisma/client';
 import { RateLimitService } from '../shared/rate-limit/rate-limit.service';
 import { GmailReplySyncService } from './gmail-reply-sync.service';
 import { LeadAnalyticsService } from './lead-analytics.service';
@@ -35,6 +43,30 @@ export class LeadAnalyticsController {
       eventType,
       limit: limit ? Number(limit) : undefined,
     });
+  }
+
+  @Get('sent-emails')
+  listSentEmails(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+    @Query('leadStatus') leadStatus?: LeadStatus,
+    @Query('hasReply') hasReply?: string,
+  ) {
+    return this.analyticsService.listSentEmails({
+      page: page ? Number(page) : undefined,
+      pageSize: pageSize ? Number(pageSize) : undefined,
+      leadStatus,
+      hasReply: hasReply === 'true',
+    });
+  }
+
+  @Get('sent-emails/:id')
+  async getSentEmailDetail(@Param('id') id: string) {
+    const detail = await this.analyticsService.getSentEmailDetail(id);
+    if (!detail) {
+      throw new NotFoundException(`Sent email ${id} not found`);
+    }
+    return detail;
   }
 
   @Get('leads/:id/timeline')

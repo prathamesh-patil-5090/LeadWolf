@@ -21,6 +21,7 @@ export class LeadEmailPersonalizationController {
     return this.personalizationService.generateByLeadId(
       id,
       body?.regenerate ?? false,
+      { requireVerified: false },
     );
   }
 

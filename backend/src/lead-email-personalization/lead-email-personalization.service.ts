@@ -45,9 +45,13 @@ export class LeadEmailPersonalizationService {
     private readonly personalizationQueue?: Queue,
   ) {}
 
-  async generateByLeadId(leadId: string, regenerate = false) {
+  async generateByLeadId(
+    leadId: string,
+    regenerate = false,
+    options?: { requireVerified?: boolean },
+  ) {
     const lead = await this.loadLead(leadId);
-    return this.generateForLead(lead, regenerate);
+    return this.generateForLead(lead, regenerate, options);
   }
 
   async startBatchGeneration(dto: GenerateEmailsDto) {
@@ -59,7 +63,9 @@ export class LeadEmailPersonalizationService {
       for (const lead of leads) {
         const fullLead = await this.loadLead(lead.id);
         results.push(
-          await this.generateForLead(fullLead, dto.regenerate ?? false),
+          await this.generateForLead(fullLead, dto.regenerate ?? false, {
+            requireVerified: true,
+          }),
         );
       }
 
@@ -96,12 +102,27 @@ export class LeadEmailPersonalizationService {
     });
   }
 
-  async generateForLead(lead: LeadWithCompany, regenerate = false) {
-    if (!lead.verified || !lead.email) {
+  async generateForLead(
+    lead: LeadWithCompany,
+    regenerate = false,
+    options?: { requireVerified?: boolean },
+  ) {
+    const requireVerified = options?.requireVerified ?? true;
+
+    if (!lead.email) {
       return {
         lead,
         skipped: true,
-        reason: !lead.email ? 'no_email' : 'not_verified',
+        reason: 'no_email',
+        emails: [],
+      };
+    }
+
+    if (requireVerified && !lead.verified) {
+      return {
+        lead,
+        skipped: true,
+        reason: 'not_verified',
         emails: [],
       };
     }

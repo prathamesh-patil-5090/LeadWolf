@@ -159,6 +159,106 @@ export class LeadAnalyticsService {
     return { lead, events };
   }
 
+  async listSentEmails(options: {
+    page?: number;
+    pageSize?: number;
+    leadStatus?: LeadStatus;
+    hasReply?: boolean;
+  }) {
+    const page = options.page ?? 1;
+    const pageSize = Math.min(options.pageSize ?? 20, 100);
+    const skip = (page - 1) * pageSize;
+
+    const where = {
+      sentAt: { not: null },
+      isPrimary: true,
+      ...(options.leadStatus ? { lead: { status: options.leadStatus } } : {}),
+      ...(options.hasReply
+        ? { emailEvents: { some: { eventType: 'REPLIED' as EmailEventType } } }
+        : {}),
+    };
+
+    const [items, total] = await Promise.all([
+      this.prisma.outreachEmail.findMany({
+        where,
+        orderBy: { sentAt: 'desc' },
+        skip,
+        take: pageSize,
+        include: {
+          lead: {
+            select: {
+              id: true,
+              name: true,
+              role: true,
+              company: true,
+              email: true,
+              status: true,
+              verified: true,
+            },
+          },
+          emailEvents: {
+            orderBy: { occurredAt: 'asc' },
+            select: {
+              id: true,
+              eventType: true,
+              source: true,
+              occurredAt: true,
+            },
+          },
+        },
+      }),
+      this.prisma.outreachEmail.count({ where }),
+    ]);
+
+    return {
+      items: items.map((row) => ({
+        ...row,
+        engagement: summarizeEngagement(row.emailEvents),
+      })),
+      total,
+      page,
+      pageSize,
+      totalPages: Math.ceil(total / pageSize) || 1,
+    };
+  }
+
+  async getSentEmailDetail(outreachEmailId: string) {
+    const outreachEmail = await this.prisma.outreachEmail.findUnique({
+      where: { id: outreachEmailId },
+      include: {
+        lead: {
+          select: {
+            id: true,
+            name: true,
+            role: true,
+            company: true,
+            email: true,
+            status: true,
+            verified: true,
+            contactConfidence: true,
+            profileUrl: true,
+            githubUrl: true,
+            linkedinUrl: true,
+            pipelineFailedStep: true,
+            pipelineError: true,
+          },
+        },
+        emailEvents: {
+          orderBy: { occurredAt: 'asc' },
+        },
+      },
+    });
+
+    if (!outreachEmail || !outreachEmail.sentAt) {
+      return null;
+    }
+
+    return {
+      outreachEmail,
+      engagement: summarizeEngagement(outreachEmail.emailEvents),
+    };
+  }
+
   private async updateLeadStatusFromEvent(
     leadId: string,
     eventType: EmailEventType,
@@ -214,4 +314,34 @@ export class LeadAnalyticsService {
 
 function roundRate(value: number) {
   return Math.round(value * 10_000) / 100;
+}
+
+function summarizeEngagement(
+  events: { eventType: EmailEventType; source: string; occurredAt: Date }[],
+) {
+  const types = new Set(events.map((e) => e.eventType));
+  const gmailReply = events.some(
+    (e) => e.eventType === 'REPLIED' && e.source.toLowerCase().includes('gmail'),
+  );
+  const brevoReply = events.some(
+    (e) =>
+      e.eventType === 'REPLIED' &&
+      (e.source.toLowerCase().includes('brevo') ||
+        e.source.toLowerCase().includes('inbound')),
+  );
+
+  return {
+    sent: types.has('SENT') || types.has('DELIVERED'),
+    delivered: types.has('DELIVERED'),
+    opened: types.has('OPENED'),
+    clicked: types.has('CLICKED'),
+    replied: types.has('REPLIED'),
+    bounced: types.has('BOUNCED') || types.has('SOFT_BOUNCE'),
+    spam: types.has('SPAM'),
+    gmailReplyDetected: gmailReply,
+    brevoReplyDetected: brevoReply,
+    lastEventAt: events.length
+      ? events[events.length - 1]!.occurredAt
+      : null,
+  };
 }
