@@ -16,6 +16,7 @@ import { SettingsModule } from './settings/settings.module';
 import { BrightDataModule } from './shared/bright-data/bright-data.module';
 import { RateLimitModule } from './shared/rate-limit/rate-limit.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -35,5 +36,6 @@ import { PrismaModule } from './prisma/prisma.module';
     LeadAnalyticsModule,
     SettingsModule,
   ],
+  controllers: [HealthController],
 })
 export class AppModule {}
