@@ -114,24 +114,31 @@ export function PipelineLogsTable({
               ) : null}
             </TableCell>
             <TableCell>
-              {variant === 'failed' && onRetry ? (
+              <div className="flex items-center gap-1">
+                {(variant === 'failed' ||
+                  (variant === 'pending' && !entry.queueState)) &&
+                onRetry ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={retryingId === entry.leadId}
+                    onClick={() => onRetry(entry.leadId)}
+                    title="Queue for pipeline"
+                  >
+                    {retryingId === entry.leadId ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <RotateCcw className="size-4" />
+                    )}
+                  </Button>
+                ) : null}
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={retryingId === entry.leadId}
-                  onClick={() => onRetry(entry.leadId)}
-                >
-                  {retryingId === entry.leadId ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <RotateCcw className="size-4" />
-                  )}
-                </Button>
-              ) : (
-                <Button variant="ghost" size="sm" nativeButton={false} render={
-                  <Link href={`/leads/${entry.leadId}`}>View</Link>
-                } />
-              )}
+                  nativeButton={false}
+                  render={<Link href={`/leads/${entry.leadId}`}>View</Link>}
+                />
+              </div>
             </TableCell>
           </TableRow>
         ))}

@@ -24,6 +24,8 @@ const IN_PROGRESS_STATUSES: LeadStatus[] = [
   LeadStatus.EMAIL_GENERATED,
 ];
 
+export const PIPELINE_IN_PROGRESS_STATUSES = IN_PROGRESS_STATUSES;
+
 const COMPLETED_STATUSES: LeadStatus[] = [
   LeadStatus.SENT,
   LeadStatus.OPENED,

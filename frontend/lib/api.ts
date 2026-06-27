@@ -106,6 +106,11 @@ export const api = {
       method: 'POST',
       body: '{}',
     }),
+  retryPending: (limit = 50) =>
+    request<{ scanned: number; requeued: number; alreadyInQueue: number }>(
+      `/pipeline/retry-pending?limit=${limit}`,
+      { method: 'POST', body: '{}' },
+    ),
 
   listLeads: (params: Record<string, string | number | undefined>) => {
     const q = new URLSearchParams();
