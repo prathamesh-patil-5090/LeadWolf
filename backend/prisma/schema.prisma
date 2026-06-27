@@ -1,0 +1,190 @@
+generator client {
+  provider     = "prisma-client"
+  output       = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum LeadStatus {
+  NEW
+  ENRICHED
+  DOMAIN_FOUND
+  CONTACT_FOUND
+  VERIFIED
+  EMAIL_GENERATED
+  SENT
+  OPENED
+  REPLIED
+  BOUNCED
+  FAILED_ENRICHMENT
+  FAILED_COMPANY_DISCOVERY
+  FAILED_CONTACT_DISCOVERY
+  FAILED_VERIFICATION
+  FAILED_EMAIL_GENERATION
+  FAILED_CAMPAIGN_SENDING
+}
+
+enum PipelineStep {
+  ENRICHMENT
+  COMPANY_DISCOVERY
+  CONTACT_DISCOVERY
+  VERIFICATION
+  EMAIL_GENERATION
+  CAMPAIGN_SENDING
+  GMAIL_SYNC
+}
+
+enum EmailEventType {
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  SOFT_BOUNCE
+  SPAM
+  UNSUBSCRIBED
+  REPLIED
+}
+
+enum LeadSearchJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model Lead {
+  id              String     @id @default(cuid())
+  name            String
+  role            String
+  company         String
+  profileUrl      String     @unique
+  location        String?
+  website         String?
+  portfolioUrl    String?
+  companyWebsite  String?
+  companySize     String?
+  githubUrl       String?
+  linkedinUrl     String?
+  email           String?
+  emailSource     String?
+  discoveredContacts Json?
+  verified        Boolean    @default(false)
+  contactConfidence Int?
+  verificationDetails Json?
+  status          LeadStatus @default(NEW)
+  pipelineFailedStep PipelineStep?
+  pipelineError      String?
+  pipelineFailedAt   DateTime?
+  pipelineRetryCount Int        @default(0)
+  companyId       String?
+  companyRecord   Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  searchJobId     String?
+  searchJob       LeadSearchJob? @relation(fields: [searchJobId], references: [id], onDelete: SetNull)
+  outreachEmails  OutreachEmail[]
+  emailEvents     EmailEvent[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([status])
+  @@index([pipelineFailedStep])
+  @@index([company])
+  @@index([role])
+  @@index([searchJobId])
+  @@index([companyId])
+}
+
+model Company {
+  id                   String    @id @default(cuid())
+  name                 String
+  domain               String    @unique
+  website              String?
+  scrapedContent       String?   @db.Text
+  summary              String?   @db.Text
+  industry             String?
+  products             String?   @db.Text
+  personalizationHooks Json?
+  discoveredEmails     Json?
+  discoveredAt         DateTime?
+  summarizedAt         DateTime?
+  leads                Lead[]
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([name])
+}
+
+model OutreachEmail {
+  id        String   @id @default(cuid())
+  leadId    String
+  lead      Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  provider  String
+  model     String
+  subject   String
+  body      String   @db.Text
+  isPrimary Boolean  @default(false)
+  latencyMs Int?
+  error     String?
+  sentAt    DateTime?
+  sentTo    String?
+  brevoMessageId String?
+  sendError String?
+  emailEvents   EmailEvent[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId])
+  @@index([leadId, isPrimary])
+}
+
+model EmailEvent {
+  id              String         @id @default(cuid())
+  outreachEmailId String?
+  outreachEmail   OutreachEmail? @relation(fields: [outreachEmailId], references: [id], onDelete: SetNull)
+  leadId          String?
+  lead            Lead?          @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  eventType       EmailEventType
+  source          String
+  externalId      String?
+  recipientEmail  String?
+  payload         Json?
+  occurredAt      DateTime
+  createdAt       DateTime       @default(now())
+
+  @@unique([source, externalId])
+  @@index([leadId])
+  @@index([outreachEmailId])
+  @@index([eventType])
+  @@index([occurredAt])
+}
+
+model LeadSearchCursor {
+  id           String   @id @default(cuid())
+  searchKey    String   @unique
+  rolePages    Json     @default("{}")
+  totalFetched Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model LeadSearchJob {
+  id         String              @id @default(cuid())
+  query      String
+  role       String?
+  location   String?
+  company    String?
+  roles         String[]            @default([])
+  expandTechRoles Boolean           @default(true)
+  limit      Int                 @default(25)
+  status     LeadSearchJobStatus @default(PENDING)
+  leadsFound Int                 @default(0)
+  newLeadsFound Int              @default(0)
+  skippedExisting Int            @default(0)
+  error      String?
+  leads      Lead[]
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+}
