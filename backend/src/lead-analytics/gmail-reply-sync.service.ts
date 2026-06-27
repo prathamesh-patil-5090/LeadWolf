@@ -42,6 +42,108 @@ export class GmailReplySyncService {
     );
   }
 
+  async syncReplyForLead(leadId: string) {
+    if (!this.isConfigured()) {
+      return {
+        configured: false,
+        matched: false,
+        leadId,
+        message: 'Gmail OAuth not configured',
+      };
+    }
+
+    const lead = await this.prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { id: true, email: true, status: true },
+    });
+
+    if (!lead?.email) {
+      return { configured: true, matched: false, leadId, reason: 'no_lead_email' };
+    }
+
+    if (lead.status !== 'SENT' && lead.status !== 'OPENED') {
+      return {
+        configured: true,
+        matched: false,
+        leadId,
+        reason: `lead_status_${lead.status}`,
+      };
+    }
+
+    const outreachEmail = await this.prisma.outreachEmail.findFirst({
+      where: { leadId, isPrimary: true, sentAt: { not: null } },
+      orderBy: { sentAt: 'desc' },
+      select: { id: true, subject: true },
+    });
+
+    if (!outreachEmail) {
+      return { configured: true, matched: false, leadId, reason: 'no_sent_email' };
+    }
+
+    const accessToken = await this.fetchAccessToken();
+    const query = `from:${lead.email} newer_than:30d`;
+    const listResponse = await this.gmailFetch<GmailMessageListResponse>(
+      accessToken,
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=10&q=${encodeURIComponent(query)}`,
+    );
+
+    const messages = listResponse.messages ?? [];
+
+    for (const message of messages) {
+      const fullMessage = await this.gmailFetch<GmailMessageResponse>(
+        accessToken,
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${message.id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`,
+      );
+
+      const headers = fullMessage.payload?.headers ?? [];
+      const subject = this.headerValue(headers, 'Subject') ?? '';
+      const fromEmail = extractEmailAddress(this.headerValue(headers, 'From'));
+
+      if (fromEmail !== lead.email.toLowerCase()) {
+        continue;
+      }
+
+      const looksLikeReply =
+        /^re:/i.test(subject) ||
+        subject
+          .toLowerCase()
+          .includes(outreachEmail.subject.toLowerCase().slice(0, 24));
+
+      if (!looksLikeReply) {
+        continue;
+      }
+
+      const occurredAt = fullMessage.internalDate
+        ? new Date(Number(fullMessage.internalDate))
+        : new Date();
+
+      const result = await this.analyticsService.recordEvent({
+        eventType: EmailEventType.REPLIED,
+        source: GMAIL_REPLY_SOURCE,
+        externalId: `gmail:${fullMessage.id}`,
+        leadId: lead.id,
+        outreachEmailId: outreachEmail.id,
+        recipientEmail: fromEmail,
+        payload: {
+          gmailMessageId: fullMessage.id,
+          threadId: fullMessage.threadId,
+          subject,
+          snippet: fullMessage.snippet,
+        },
+        occurredAt,
+      });
+
+      if (result.created) {
+        this.logger.log(`Gmail reply detected for lead ${leadId} from ${fromEmail}`);
+        return { configured: true, matched: true, leadId, replied: true };
+      }
+
+      return { configured: true, matched: true, leadId, replied: true, duplicate: true };
+    }
+
+    return { configured: true, matched: false, leadId, replied: false };
+  }
+
   async syncReplies(limit = 20) {
     if (!this.isConfigured()) {
       return {

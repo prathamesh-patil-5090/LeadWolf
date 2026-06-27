@@ -21,6 +21,7 @@ import { PrismaModule } from './prisma/prisma.module';
     RateLimitModule,
     ...bullRootImports(),
     PrismaModule,
+    LeadPipelineModule.register(),
     LeadSearchModule.register(),
     LeadEnrichmentModule.register(),
     LeadCompanyDiscoveryModule.register(),
@@ -29,7 +30,6 @@ import { PrismaModule } from './prisma/prisma.module';
     LeadEmailPersonalizationModule.register(),
     LeadCampaignSendingModule.register(),
     LeadAnalyticsModule,
-    LeadPipelineModule,
   ],
 })
 export class AppModule {}

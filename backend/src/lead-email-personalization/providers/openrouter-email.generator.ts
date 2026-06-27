@@ -4,6 +4,7 @@ import {
   OutreachEmailContext,
   ProviderGenerationResult,
 } from '../interfaces/email-generation.interface';
+import { EMAIL_GENERATION_SYSTEM_PROMPT } from '../prompts/crag-product.context';
 import { buildOutreachEmailPrompt } from '../prompts/outreach-email.prompt';
 import { EMAIL_PROVIDERS } from '../constants';
 import {
@@ -17,8 +18,29 @@ const DEFAULT_OPENROUTER_MODEL = 'meta-llama/llama-3.3-70b-instruct:free';
 const DEFAULT_FALLBACK_MODELS = [
   'meta-llama/llama-3.2-3b-instruct:free',
   'qwen/qwen-2.5-7b-instruct:free',
-  'openrouter/free',
 ];
+
+function supportsJsonResponseFormat(model: string) {
+  const normalized = model.toLowerCase();
+  return (
+    normalized.includes('instruct') ||
+    normalized.includes('llama') ||
+    normalized.includes('qwen') ||
+    normalized.includes('mistral')
+  ) && !normalized.includes('nemotron');
+}
+
+function timeoutForModel(model: string) {
+  if (model === 'openrouter/free') {
+    return 35_000;
+  }
+
+  if (model.toLowerCase().includes('nemotron')) {
+    return 45_000;
+  }
+
+  return 60_000;
+}
 
 @Injectable()
 export class OpenRouterEmailGenerator {
@@ -57,6 +79,8 @@ export class OpenRouterEmailGenerator {
           baseUrl: 'https://openrouter.ai/api/v1',
           apiKey,
           model,
+          jsonMode: supportsJsonResponseFormat(model),
+          timeoutMs: timeoutForModel(model),
           extraHeaders: {
             'HTTP-Referer': 'https://leadwolf.local',
             'X-Title': 'LeadWolf',
@@ -64,8 +88,7 @@ export class OpenRouterEmailGenerator {
           messages: [
             {
               role: 'system',
-              content:
-                'You write short, human, casual cold emails to developers. Use simple everyday English — no heavy or formal words. Return valid JSON with subject and body fields only. The body must end with the provided signature block.',
+              content: EMAIL_GENERATION_SYSTEM_PROMPT,
             },
             { role: 'user', content: buildOutreachEmailPrompt(context) },
           ],

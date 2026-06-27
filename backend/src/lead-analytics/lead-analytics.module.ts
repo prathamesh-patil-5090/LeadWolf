@@ -8,6 +8,6 @@ import { LeadAnalyticsService } from './lead-analytics.service';
 @Module({
   controllers: [LeadAnalyticsController, BrevoWebhookController],
   providers: [LeadAnalyticsService, BrevoWebhookService, GmailReplySyncService],
-  exports: [LeadAnalyticsService],
+  exports: [LeadAnalyticsService, GmailReplySyncService],
 })
 export class LeadAnalyticsModule {}

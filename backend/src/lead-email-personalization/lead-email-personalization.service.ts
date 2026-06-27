@@ -12,7 +12,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LEAD_EMAIL_PERSONALIZATION_QUEUE } from './constants';
 import { GenerateEmailsDto } from './dto/generate-emails.dto';
 import { OutreachEmailContext } from './interfaces/email-generation.interface';
-import { ParallelEmailGenerationService } from './services/parallel-email-generation.service';
+import { LeadCampaignSendingService } from '../lead-campaign-sending/lead-campaign-sending.service';
+import { GmailReplySyncService } from '../lead-analytics/gmail-reply-sync.service';
+import { SplitEmailGenerationService } from './services/split-email-generation.service';
 import {
   ensureEmailSignature,
   loadSenderSignatureConfig,
@@ -35,7 +37,9 @@ export class LeadEmailPersonalizationService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
-    private readonly parallelGeneration: ParallelEmailGenerationService,
+    private readonly splitGeneration: SplitEmailGenerationService,
+    private readonly campaignSendingService: LeadCampaignSendingService,
+    private readonly gmailReplySyncService: GmailReplySyncService,
     @Optional()
     @InjectQueue(LEAD_EMAIL_PERSONALIZATION_QUEUE)
     private readonly personalizationQueue?: Queue,
@@ -120,85 +124,142 @@ export class LeadEmailPersonalizationService {
 
     const senderConfig = loadSenderSignatureConfig(this.configService);
     const context = toOutreachEmailContext(lead, senderConfig);
-    const providerResults =
-      await this.parallelGeneration.generateInParallel(context);
+    const assignedProvider = this.splitGeneration.resolveProvider(lead.id);
+    const result = await this.splitGeneration.generateForLead(lead.id, context);
 
-    const savedEmails = [];
-    for (const result of providerResults) {
-      const draft = result.draft
-        ? {
-            subject: result.draft.subject,
-            body: ensureEmailSignature(
-              result.draft.body,
-              context.signatureBlock,
-              context.senderEmail,
-            ),
-          }
-        : undefined;
+    const draft = result.draft
+      ? {
+          subject: result.draft.subject,
+          body: ensureEmailSignature(
+            result.draft.body,
+            context.signatureBlock,
+            context.senderEmail,
+          ),
+        }
+      : undefined;
 
-      const saved = await this.prisma.outreachEmail.create({
-        data: {
-          leadId: lead.id,
-          provider: result.provider,
-          model: result.model,
-          subject: draft?.subject ?? '',
-          body: draft?.body ?? '',
-          latencyMs: result.latencyMs,
-          error: result.error ?? (draft ? undefined : 'Generation failed'),
-        },
-      });
-      savedEmails.push(saved);
-    }
+    const saved = await this.prisma.outreachEmail.create({
+      data: {
+        leadId: lead.id,
+        provider: result.provider,
+        model: result.model,
+        subject: draft?.subject ?? '',
+        body: draft?.body ?? '',
+        latencyMs: result.latencyMs,
+        error: result.error ?? (draft ? undefined : 'Generation failed'),
+        isPrimary: true,
+      },
+    });
 
-    const successful = savedEmails.filter(
-      (email) => !email.error && email.subject && email.body,
-    );
-
-    if (successful.length > 0) {
-      const fastest = [...successful].sort(
-        (a, b) => (a.latencyMs ?? 0) - (b.latencyMs ?? 0),
-      )[0];
-
-      await this.prisma.outreachEmail.updateMany({
-        where: { leadId: lead.id },
-        data: { isPrimary: false },
-      });
-
-      await this.prisma.outreachEmail.update({
-        where: { id: fastest.id },
-        data: { isPrimary: true },
-      });
-    }
+    const successful = !saved.error && saved.subject && saved.body;
 
     const updatedLead = await this.prisma.lead.update({
       where: { id: lead.id },
       data: {
-        status:
-          successful.length > 0 ? LeadStatus.EMAIL_GENERATED : lead.status,
+        status: successful ? LeadStatus.EMAIL_GENERATED : lead.status,
       },
     });
 
-    const emails = await this.prisma.outreachEmail.findMany({
-      where: { leadId: lead.id },
-      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'desc' }],
-    });
-
     this.logger.log(
-      `Generated ${successful.length}/${providerResults.length} emails for lead ${lead.id}`,
+      `Generated email for lead ${lead.id} via ${assignedProvider} (success=${successful})`,
     );
 
+    if (!successful) {
+      return {
+        lead: updatedLead,
+        skipped: false,
+        assignedProvider,
+        emails: [saved],
+        providers: [
+          {
+            provider: result.provider,
+            model: result.model,
+            success: false,
+            latencyMs: result.latencyMs,
+            error: result.error,
+          },
+        ],
+      };
+    }
+
+    const sendResult = await this.autoSendAfterGeneration(lead.id, regenerate);
+
+    const finalLead = await this.prisma.lead.findUniqueOrThrow({
+      where: { id: lead.id },
+    });
+
     return {
-      lead: updatedLead,
+      lead: finalLead,
       skipped: false,
-      emails,
-      providers: providerResults.map((result) => ({
-        provider: result.provider,
-        model: result.model,
-        success: Boolean(result.draft),
-        latencyMs: result.latencyMs,
-        error: result.error,
-      })),
+      assignedProvider,
+      emails: [saved],
+      send: sendResult,
+      providers: [
+        {
+          provider: result.provider,
+          model: result.model,
+          success: true,
+          latencyMs: result.latencyMs,
+          error: result.error,
+        },
+      ],
     };
+  }
+
+  private async autoSendAfterGeneration(leadId: string, forceResend: boolean) {
+    if (
+      this.configService.get<string>('LEAD_PIPELINE_AUTO_SEND', 'true') !== 'true'
+    ) {
+      return { skipped: true, reason: 'auto_send_disabled' };
+    }
+
+    try {
+      const sendResult = await this.campaignSendingService.sendByLeadId(
+        leadId,
+        forceResend,
+      );
+
+      if (sendResult.skipped) {
+        return sendResult;
+      }
+
+      this.logger.log(
+        `Auto-sent email for lead ${leadId} → ${sendResult.actualRecipient} (testMode=${sendResult.testMode})`,
+      );
+
+      if (
+        this.configService.get<string>('LEAD_PIPELINE_AUTO_GMAIL_SYNC', 'true') ===
+        'true'
+      ) {
+        try {
+          await this.gmailReplySyncService.syncReplyForLead(leadId);
+        } catch (error) {
+          this.logger.warn(
+            `Gmail sync after send failed for ${leadId}: ${
+              error instanceof Error ? error.message : error
+            }`,
+          );
+        }
+      }
+
+      return sendResult;
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : 'Brevo send failed';
+
+      await this.prisma.lead.update({
+        where: { id: leadId },
+        data: {
+          status: LeadStatus.FAILED_CAMPAIGN_SENDING,
+          pipelineFailedStep: 'CAMPAIGN_SENDING',
+          pipelineError: message.slice(0, 2000),
+          pipelineFailedAt: new Date(),
+        },
+      });
+
+      this.logger.warn(`Auto-send failed for lead ${leadId}: ${message}`);
+      return { skipped: false, error: message };
+    }
   }
 
   private async loadLead(leadId: string): Promise<LeadWithCompany> {

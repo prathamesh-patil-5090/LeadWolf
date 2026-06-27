@@ -10,7 +10,11 @@ import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { LeadStatus } from '../../generated/prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { loadSenderSignatureConfig } from '../lead-email-personalization/utils/sender-signature.util';
+import {
+  buildSenderSignatureBlock,
+  loadSenderSignatureConfig,
+  refreshEmailSignature,
+} from '../lead-email-personalization/utils/sender-signature.util';
 import { BrevoEmailClient } from './brevo-email.client';
 import { LEAD_CAMPAIGN_SENDING_QUEUE } from './constants';
 import { SendCampaignDto } from './dto/send-campaign.dto';
@@ -119,6 +123,11 @@ export class LeadCampaignSendingService {
 
     const recipient = this.resolveRecipient(lead.name, lead.email);
     const sender = loadSenderSignatureConfig(this.configService);
+    const signatureBlock = buildSenderSignatureBlock(sender);
+    const bodyWithSignature = refreshEmailSignature(
+      outreachEmail.body,
+      signatureBlock,
+    );
 
     const subject = recipient.testMode
       ? `[TEST for ${lead.name}] ${outreachEmail.subject}`
@@ -137,7 +146,7 @@ export class LeadCampaignSendingService {
         toEmail: recipient.email,
         toName: recipient.name,
         subject,
-        textContent: `${testBanner}${outreachEmail.body}`,
+        textContent: `${testBanner}${bodyWithSignature}`,
         replyToEmail,
         leadId: lead.id,
         outreachEmailId: outreachEmail.id,
@@ -146,6 +155,7 @@ export class LeadCampaignSendingService {
       const updatedEmail = await this.prisma.outreachEmail.update({
         where: { id: outreachEmail.id },
         data: {
+          body: bodyWithSignature,
           sentAt: new Date(),
           sentTo: recipient.email,
           brevoMessageId: result.messageId,

@@ -12,7 +12,7 @@ import type { LeadSearchProvider } from './interfaces/lead-search-provider.inter
 import {
   DiscoveredLead,
 } from './interfaces/lead-search-provider.interface';
-import { LeadPipelineService } from '../lead-pipeline/lead-pipeline.service';
+import { LeadPipelineQueueService } from '../lead-pipeline/lead-pipeline-queue.service';
 import { buildSearchKey } from './utils/search-key.util';
 
 @Injectable()
@@ -28,7 +28,7 @@ export class LeadSearchService {
     @InjectQueue(LEAD_SEARCH_QUEUE)
     private readonly leadSearchQueue?: Queue,
     @Optional()
-    private readonly leadPipelineService?: LeadPipelineService,
+    private readonly leadPipelineQueueService?: LeadPipelineQueueService,
   ) {}
 
   async startSearch(dto: SearchLeadsDto) {
@@ -222,13 +222,14 @@ export class LeadSearchService {
     });
 
     if (
-      this.leadPipelineService?.isAutoEnabled()
+      this.leadPipelineQueueService &&
+      this.configService.get<string>('LEAD_PIPELINE_AUTO', 'true') === 'true'
     ) {
       try {
-        return await this.leadPipelineService.processLead(lead);
+        return await this.leadPipelineQueueService.enqueueLead(lead.id);
       } catch (error) {
         this.logger.warn(
-          `Pipeline failed for lead ${lead.id}: ${
+          `Pipeline enqueue failed for lead ${lead.id}: ${
             error instanceof Error ? error.message : error
           }`,
         );
@@ -244,7 +245,6 @@ export class LeadSearchService {
   ) {
     const newLeads: Lead[] = [];
     let updatedLeads = 0;
-    const pipelineCap = this.readPipelineCap();
 
     for (const lead of discovered) {
       const githubUrl = lead.githubUrl ?? this.extractGithubUrl(lead.profileUrl);
@@ -292,55 +292,26 @@ export class LeadSearchService {
       }
     }
 
-    const leadsForPipeline = newLeads.slice(0, pipelineCap);
-    if (newLeads.length > pipelineCap) {
-      this.logger.warn(
-        `Pipeline cap ${pipelineCap} reached — ${newLeads.length - pipelineCap} new lead(s) saved without auto-pipeline`,
+    if (
+      newLeads.length > 0 &&
+      this.leadPipelineQueueService &&
+      this.configService.get<string>('LEAD_PIPELINE_AUTO', 'true') === 'true'
+    ) {
+      const enqueueResult = await this.leadPipelineQueueService.enqueueLeads(
+        newLeads.map((lead) => lead.id),
+      );
+
+      this.logger.log(
+        `Queued ${enqueueResult.queued} lead(s) for pipeline (${enqueueResult.processedSync} sync)`,
       );
     }
-
-    await this.runPipelineForLeads(leadsForPipeline);
 
     return {
       newLeads: newLeads.length,
       updatedLeads,
-      pipelined: leadsForPipeline.length,
+      pipelined: newLeads.length,
+      queued: newLeads.length,
     };
-  }
-
-  private readPipelineCap() {
-    const value = Number(
-      this.configService.get<string>('LEAD_PIPELINE_MAX_LEADS_PER_SEARCH', '25'),
-    );
-    return Number.isFinite(value) && value > 0 ? value : 25;
-  }
-
-  private async runPipelineForLead(lead: Lead) {
-    if (!this.leadPipelineService?.isAutoEnabled()) {
-      return;
-    }
-
-    try {
-      await this.leadPipelineService.processLead(lead);
-    } catch (error) {
-      this.logger.warn(
-        `Pipeline failed for lead ${lead.id}: ${
-          error instanceof Error ? error.message : error
-        }`,
-      );
-    }
-  }
-
-  private async runPipelineForLeads(leads: Lead[]) {
-    if (!this.leadPipelineService?.isAutoEnabled() || !leads.length) {
-      return;
-    }
-
-    this.logger.log(`Running pipeline for ${leads.length} lead(s)`);
-
-    for (const lead of leads) {
-      await this.runPipelineForLead(lead);
-    }
   }
 
   private extractGithubUrl(profileUrl: string): string | undefined {

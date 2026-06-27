@@ -1,0 +1,26 @@
+-- AlterEnum: pipeline failure statuses
+ALTER TYPE "LeadStatus" ADD VALUE 'FAILED_ENRICHMENT';
+ALTER TYPE "LeadStatus" ADD VALUE 'FAILED_COMPANY_DISCOVERY';
+ALTER TYPE "LeadStatus" ADD VALUE 'FAILED_CONTACT_DISCOVERY';
+ALTER TYPE "LeadStatus" ADD VALUE 'FAILED_VERIFICATION';
+ALTER TYPE "LeadStatus" ADD VALUE 'FAILED_EMAIL_GENERATION';
+ALTER TYPE "LeadStatus" ADD VALUE 'FAILED_CAMPAIGN_SENDING';
+
+-- CreateEnum
+CREATE TYPE "PipelineStep" AS ENUM (
+  'ENRICHMENT',
+  'COMPANY_DISCOVERY',
+  'CONTACT_DISCOVERY',
+  'VERIFICATION',
+  'EMAIL_GENERATION',
+  'CAMPAIGN_SENDING'
+);
+
+-- AlterTable
+ALTER TABLE "Lead" ADD COLUMN "pipelineFailedStep" "PipelineStep";
+ALTER TABLE "Lead" ADD COLUMN "pipelineError" TEXT;
+ALTER TABLE "Lead" ADD COLUMN "pipelineFailedAt" TIMESTAMP(3);
+ALTER TABLE "Lead" ADD COLUMN "pipelineRetryCount" INTEGER NOT NULL DEFAULT 0;
+
+-- CreateIndex
+CREATE INDEX "Lead_pipelineFailedStep_idx" ON "Lead"("pipelineFailedStep");

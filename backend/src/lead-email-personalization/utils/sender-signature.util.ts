@@ -9,6 +9,7 @@ export interface SenderSignatureConfig {
   senderGithub: string;
   senderWhatsapp: string;
   senderEmail: string;
+  senderContactEmails: string;
   senderPitch: string;
 }
 
@@ -21,14 +22,15 @@ export function loadSenderSignatureConfig(
       'OUTREACH_SENDER_TITLE',
       'Full-Stack AI Engineer',
     ),
-    senderCompany: configService.get<string>('OUTREACH_SENDER_COMPANY', ''),
+    senderCompany: configService.get<string>('OUTREACH_SENDER_COMPANY', 'CRag'),
     senderLinkedin: configService.get<string>('OUTREACH_SENDER_LINKEDIN', ''),
     senderGithub: configService.get<string>('OUTREACH_SENDER_GITHUB', ''),
     senderWhatsapp: configService.get<string>('OUTREACH_SENDER_WHATSAPP', ''),
     senderEmail: configService.get<string>('OUTREACH_SENDER_EMAIL', ''),
+    senderContactEmails: resolveContactEmails(configService),
     senderPitch: configService.get<string>(
       'OUTREACH_SENDER_PITCH',
-      'building affordable developer outreach tools for solo founders',
+      'CRag is an AI-Powered Engineering Knowledge Platform that reduces onboarding time and eliminates documentation drift',
     ),
   };
 }
@@ -43,51 +45,78 @@ export function buildSenderSignatureBlock(
     | 'senderGithub'
     | 'senderWhatsapp'
     | 'senderEmail'
+    | 'senderContactEmails'
   >,
 ): string {
-  const lines = [
-    'Best regards,',
-    '',
-    config.senderName,
-    config.senderTitle,
-  ];
+  const lines = ['Best regards,', '', config.senderName];
 
   if (config.senderCompany?.trim()) {
-    lines.push(config.senderCompany.trim());
+    lines.push(`Founder, ${config.senderCompany.trim()}`);
   }
 
+  lines.push(config.senderTitle);
+
   if (config.senderLinkedin?.trim()) {
-    lines.push(`LinkedIn: ${config.senderLinkedin.trim()}`);
+    lines.push('', 'LinkedIn:', config.senderLinkedin.trim());
   }
 
   if (config.senderGithub?.trim()) {
-    lines.push(`GitHub: ${config.senderGithub.trim()}`);
+    lines.push('', 'GitHub:', config.senderGithub.trim());
+  }
+
+  if (config.senderContactEmails?.trim()) {
+    lines.push('', `Contact: ${config.senderContactEmails.trim()}`);
   }
 
   if (config.senderWhatsapp?.trim()) {
-    lines.push(`WhatsApp NO: ${config.senderWhatsapp.trim()}`);
-  }
-
-  if (config.senderEmail?.trim()) {
-    lines.push(`Contact mail: ${config.senderEmail.trim()}`);
+    lines.push(`Contact & WhatsApp No: ${config.senderWhatsapp.trim()}`);
   }
 
   return lines.join('\n');
 }
 
+function resolveContactEmails(configService: ConfigService) {
+  const explicit = configService.get<string>('OUTREACH_SENDER_CONTACT_EMAILS');
+  if (explicit?.trim()) {
+    return explicit.trim();
+  }
+
+  const primary = configService.get<string>('OUTREACH_SENDER_EMAIL', '').trim();
+  const alt = configService.get<string>('OUTREACH_SENDER_ALT_EMAIL', '').trim();
+
+  if (primary && alt) {
+    return `${primary} / ${alt}`;
+  }
+
+  return primary || alt;
+}
+
+const SIGNATURE_START_PATTERN = /(\n|^)\s*Best regards,\s*(\n|$)/i;
+
+export function refreshEmailSignature(
+  body: string,
+  signatureBlock: string,
+): string {
+  const trimmedBody = body.trim();
+  const signatureStart = trimmedBody.search(SIGNATURE_START_PATTERN);
+  const messageBody =
+    signatureStart >= 0
+      ? trimmedBody.slice(0, signatureStart).trim()
+      : trimmedBody;
+
+  if (!messageBody) {
+    return signatureBlock;
+  }
+
+  return `${messageBody}\n\n${signatureBlock}`;
+}
+
 export function ensureEmailSignature(
   body: string,
   signatureBlock: string,
-  senderEmail?: string,
+  _senderEmail?: string,
 ): string {
-  const trimmedBody = body.trim();
-  const marker = senderEmail?.trim() || 'Best regards,';
-
-  if (trimmedBody.includes(marker)) {
-    return trimmedBody;
-  }
-
-  return `${trimmedBody}\n\n${signatureBlock}`;
+  return refreshEmailSignature(body, signatureBlock);
 }
 
 export function toOutreachEmailContext(

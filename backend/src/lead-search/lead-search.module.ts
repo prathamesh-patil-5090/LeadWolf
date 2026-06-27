@@ -7,7 +7,6 @@ import { LeadSearchController } from './lead-search.controller';
 import { LeadSearchProcessor } from './lead-search.processor';
 import { LeadSearchService } from './lead-search.service';
 import { createLeadSearchProvider } from './providers/lead-search-provider.factory';
-import { LeadPipelineModule } from '../lead-pipeline/lead-pipeline.module';
 
 @Module({})
 export class LeadSearchModule {
@@ -19,7 +18,6 @@ export class LeadSearchModule {
     return {
       module: LeadSearchModule,
       imports: [
-        LeadPipelineModule,
         ...(useQueue
           ? [BullModule.registerQueue({ name: LEAD_SEARCH_QUEUE })]
           : []),
@@ -62,6 +60,8 @@ export function bullRootImports() {
   const campaignSendingUseQueue =
     (process.env.LEAD_CAMPAIGN_SENDING_SYNC ?? 'true') !== 'true' &&
     Boolean(process.env.REDIS_URL);
+  const pipelineUseQueue =
+    process.env.LEAD_PIPELINE_SYNC !== 'true' && Boolean(process.env.REDIS_URL);
   const useQueue =
     searchUseQueue ||
     enrichmentUseQueue ||
@@ -69,7 +69,8 @@ export function bullRootImports() {
     contactDiscoveryUseQueue ||
     contactVerificationUseQueue ||
     emailPersonalizationUseQueue ||
-    campaignSendingUseQueue;
+    campaignSendingUseQueue ||
+    pipelineUseQueue;
 
   if (!useQueue) {
     return [];

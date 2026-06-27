@@ -4,6 +4,7 @@ import {
   OutreachEmailContext,
   ProviderGenerationResult,
 } from '../interfaces/email-generation.interface';
+import { EMAIL_GENERATION_SYSTEM_PROMPT } from '../prompts/crag-product.context';
 import { buildOutreachEmailPrompt } from '../prompts/outreach-email.prompt';
 import { EMAIL_PROVIDERS } from '../constants';
 import {
@@ -51,8 +52,7 @@ export class GroqEmailGenerator {
         messages: [
           {
             role: 'system',
-            content:
-              'You write short, human, casual cold emails to developers. Use simple everyday English — no heavy or formal words. Return valid JSON with subject and body fields only. The body must end with the provided signature block.',
+            content: EMAIL_GENERATION_SYSTEM_PROMPT,
           },
           { role: 'user', content: buildOutreachEmailPrompt(context) },
         ],

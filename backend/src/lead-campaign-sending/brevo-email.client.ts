@@ -46,12 +46,10 @@ export class BrevoEmailClient {
       tags.push(`outreach:${payload.outreachEmailId}`);
     }
 
-    const headers: Array<{ name: string; value: string }> = [];
+    const customHeaders: Record<string, string> = {};
     if (payload.leadId && payload.outreachEmailId) {
-      headers.push({
-        name: 'X-Mailin-custom',
-        value: `${payload.leadId}:${payload.outreachEmailId}`,
-      });
+      customHeaders['X-Mailin-custom'] =
+        `${payload.leadId}:${payload.outreachEmailId}`;
     }
 
     const body: Record<string, unknown> = {
@@ -72,8 +70,8 @@ export class BrevoEmailClient {
       body.tags = tags;
     }
 
-    if (headers.length) {
-      body.headers = headers;
+    if (Object.keys(customHeaders).length) {
+      body.headers = customHeaders;
     }
 
     const response = await fetch(BREVO_API_URL, {

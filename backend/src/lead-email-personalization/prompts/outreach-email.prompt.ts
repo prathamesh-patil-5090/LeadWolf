@@ -1,52 +1,82 @@
 import { OutreachEmailContext } from '../interfaces/email-generation.interface';
+import {
+  CRAG_BENEFITS,
+  CRAG_ELEVATOR_PITCH,
+  CRAG_FEATURES_SUMMARY,
+  CRAG_IDEAL_BUYERS,
+  CRAG_OUTREACH_RULES,
+  CRAG_POSITIONING,
+  CRAG_PROBLEMS,
+  CRAG_TARGET_COMPANIES,
+} from './crag-product.context';
 
 export function buildOutreachEmailPrompt(context: OutreachEmailContext): string {
   const hooks =
     context.personalizationHooks.length > 0
       ? context.personalizationHooks.map((hook) => `- ${hook}`).join('\n')
-      : '- No specific hooks available — use company summary only';
+      : '- No specific hooks — infer one reasonable observation from company summary/products only';
 
-  return `Write a personalized cold outreach email to a technical professional.
+  const problems = CRAG_PROBLEMS.map((item) => `- ${item}`).join('\n');
+  const benefits = CRAG_BENEFITS.map((item) => `- ${item}`).join('\n');
+  const buyers = CRAG_IDEAL_BUYERS.join(', ');
 
-Recipient:
-- Name: ${context.leadName}
-- Role: ${context.leadRole}
-- Company: ${context.leadCompany}
-- Location: ${context.leadLocation ?? 'unknown'}
-- Website: ${context.leadWebsite ?? 'unknown'}
-- GitHub: ${context.leadGithub ?? 'unknown'}
+  return `Write a personalized cold outreach email from ${context.senderName} (${context.senderCompany || 'CRag'}) to sell a discovery call for CRag.
 
-Company context:
-- Industry: ${context.companyIndustry ?? 'unknown'}
-- Products: ${context.companyProducts ?? 'unknown'}
-- Summary: ${context.companySummary ?? 'No company summary available.'}
+=== RECIPIENT ===
+Name: ${context.leadName}
+Role: ${context.leadRole}
+Company: ${context.leadCompany}
+Location: ${context.leadLocation ?? 'unknown'}
+Website: ${context.leadWebsite ?? 'unknown'}
+GitHub: ${context.leadGithub ?? 'unknown'}
 
-Personalization hooks:
+=== RECIPIENT COMPANY CONTEXT ===
+Industry: ${context.companyIndustry ?? 'unknown'}
+Products / focus: ${context.companyProducts ?? 'unknown'}
+Summary: ${context.companySummary ?? 'No company summary available.'}
+
+Personalization hooks (use at least one if relevant):
 ${hooks}
 
-Sender pitch (one line about why you are reaching out):
-${context.senderPitch}
+=== PRODUCT: CRag ===
+Positioning: ${CRAG_POSITIONING}
 
-Tone and language (very important):
-- Write like a real person sending a quick email, not a marketing brochure
-- Use simple, everyday English — short sentences, plain words
-- Avoid heavy or formal words (e.g. leverage, utilize, synergy, innovative, cutting-edge, delighted, esteemed, furthermore, consequently)
-- Subject line: short, casual, specific — 4–8 simple words max
-- Body: warm and direct, under 120 words before the signature
-- No "I hope this finds you well", no corporate fluff, no bullet points
+Elevator pitch: ${CRAG_ELEVATOR_PITCH}
 
-Content rules:
-- Mention their role and company naturally
-- Reference one real observation from the company context or hooks
-- Do not invent facts not supported by the context
+${CRAG_FEATURES_SUMMARY}
 
-Signature — end the body with this block exactly (copy verbatim, including line breaks):
+Problems CRag solves:
+${problems}
+
+Outcomes for customers:
+${benefits}
+
+Ideal buyers: ${buyers}
+Target companies: ${CRAG_TARGET_COMPANIES}
+
+=== EMAIL STRUCTURE (follow this order) ===
+1. Opening: greet by first name. Mention their role at ${context.leadCompany}.
+2. Company-specific observation: ONE concrete detail from company context, products, industry, or hooks (e.g. what they build, their stack, or engineering scale). Do not invent facts.
+3. Their likely pain: connect 1–2 problems CRag solves to what a ${context.leadRole} at a company like theirs typically faces (onboarding, doc drift, tribal knowledge, scattered repos).
+4. CRag value: 2–3 sentences on what CRag does for their engineering org — living knowledge base, auto-synced docs, source-backed answers from repos and internal docs.
+5. Specific benefit: one sentence on how ${context.leadCompany} could benefit given what you know about them.
+6. CTA: ask for a 15-minute call or quick demo. Keep it low-pressure.
+
+=== RULES ===
+${CRAG_OUTREACH_RULES}
+- Subject: specific to their company or role — 5–9 words, professional (not clickbait)
+- Body length: 130–170 words BEFORE the signature (detailed but scannable — 4–6 short paragraphs)
+- No bullet points in the email body
+- No "I hope this email finds you well"
+- Mention CRag by name once naturally
+
+=== SIGNATURE (end body with this block exactly) ===
 ${context.signatureBlock}
 
-Return JSON only (no markdown fences):
+Return JSON only:
 {
-  "subject": "simple casual subject line",
-  "body": "email body ending with the signature block above, use \\n for line breaks"
+  "subject": "professional specific subject line",
+  "body": "full email ending with signature block, use \\n for line breaks"
 }`;
 }
 
@@ -67,7 +97,7 @@ export function parseEmailDraftResponse(content: string): {
     };
 
     if (!parsed.subject?.trim() || !parsed.body?.trim()) {
-      return null;
+      return extractDraftFromLooseText(jsonText);
     }
 
     return {
@@ -75,16 +105,69 @@ export function parseEmailDraftResponse(content: string): {
       body: parsed.body.trim().replace(/\\n/g, '\n'),
     };
   } catch {
-    const subjectMatch = jsonText.match(/^Subject:\s*(.+)$/im);
-    const body = jsonText.replace(/^Subject:.*$/im, '').trim();
-
-    if (subjectMatch && body) {
-      return {
-        subject: subjectMatch[1].trim(),
-        body,
-      };
+    const extracted = extractDraftFieldsFromBrokenJson(jsonText);
+    if (extracted) {
+      return extracted;
     }
 
-    return null;
+    return extractDraftFromLooseText(jsonText);
   }
+}
+
+function extractDraftFieldsFromBrokenJson(text: string) {
+  const subject = extractJsonStringField(text, 'subject');
+  const body = extractJsonStringField(text, 'body');
+
+  if (subject && body) {
+    return {
+      subject,
+      body: body.replace(/\\n/g, '\n'),
+    };
+  }
+
+  return null;
+}
+
+function extractJsonStringField(text: string, field: string) {
+  const pattern = new RegExp(
+    `"${field}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`,
+    'is',
+  );
+  const match = text.match(pattern);
+  if (!match?.[1]) {
+    return undefined;
+  }
+
+  return unescapeJsonString(match[1]).trim();
+}
+
+function unescapeJsonString(value: string) {
+  return value
+    .replace(/\\n/g, '\n')
+    .replace(/\\r/g, '\r')
+    .replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"')
+    .replace(/\\\\/g, '\\');
+}
+
+function extractDraftFromLooseText(text: string) {
+  const subjectMatch =
+    text.match(/^Subject:\s*(.+)$/im) ??
+    text.match(/"subject"\s*:\s*"?([^"\n]+)"?/i);
+  const bodyMatch = text.match(/^Body:\s*([\s\S]+)$/im);
+
+  if (subjectMatch && bodyMatch) {
+    return {
+      subject: subjectMatch[1].trim(),
+      body: bodyMatch[1].trim(),
+    };
+  }
+
+  const subject = extractJsonStringField(text, 'subject');
+  const body = extractJsonStringField(text, 'body');
+  if (subject && body) {
+    return { subject, body: body.replace(/\\n/g, '\n') };
+  }
+
+  return null;
 }

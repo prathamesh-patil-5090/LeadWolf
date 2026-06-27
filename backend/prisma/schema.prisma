@@ -19,6 +19,22 @@ enum LeadStatus {
   OPENED
   REPLIED
   BOUNCED
+  FAILED_ENRICHMENT
+  FAILED_COMPANY_DISCOVERY
+  FAILED_CONTACT_DISCOVERY
+  FAILED_VERIFICATION
+  FAILED_EMAIL_GENERATION
+  FAILED_CAMPAIGN_SENDING
+}
+
+enum PipelineStep {
+  ENRICHMENT
+  COMPANY_DISCOVERY
+  CONTACT_DISCOVERY
+  VERIFICATION
+  EMAIL_GENERATION
+  CAMPAIGN_SENDING
+  GMAIL_SYNC
 }
 
 enum EmailEventType {
@@ -60,6 +76,10 @@ model Lead {
   contactConfidence Int?
   verificationDetails Json?
   status          LeadStatus @default(NEW)
+  pipelineFailedStep PipelineStep?
+  pipelineError      String?
+  pipelineFailedAt   DateTime?
+  pipelineRetryCount Int        @default(0)
   companyId       String?
   companyRecord   Company?   @relation(fields: [companyId], references: [id], onDelete: SetNull)
   searchJobId     String?
@@ -70,6 +90,7 @@ model Lead {
   updatedAt       DateTime   @updatedAt
 
   @@index([status])
+  @@index([pipelineFailedStep])
   @@index([company])
   @@index([role])
   @@index([searchJobId])

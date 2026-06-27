@@ -1,4 +1,6 @@
 import { DynamicModule, Module } from '@nestjs/common';
+import { LeadCampaignSendingModule } from '../lead-campaign-sending/lead-campaign-sending.module';
+import { LeadAnalyticsModule } from '../lead-analytics/lead-analytics.module';
 import { BullModule } from '@nestjs/bullmq';
 import { LEAD_EMAIL_PERSONALIZATION_QUEUE } from './constants';
 import { LeadEmailPersonalizationController } from './lead-email-personalization.controller';
@@ -7,7 +9,7 @@ import { LeadEmailPersonalizationService } from './lead-email-personalization.se
 import { GrokEmailGenerator } from './providers/grok-email.generator';
 import { GroqEmailGenerator } from './providers/groq-email.generator';
 import { OpenRouterEmailGenerator } from './providers/openrouter-email.generator';
-import { ParallelEmailGenerationService } from './services/parallel-email-generation.service';
+import { SplitEmailGenerationService } from './services/split-email-generation.service';
 
 @Module({})
 export class LeadEmailPersonalizationModule {
@@ -18,13 +20,17 @@ export class LeadEmailPersonalizationModule {
 
     return {
       module: LeadEmailPersonalizationModule,
-      imports: useQueue
-        ? [BullModule.registerQueue({ name: LEAD_EMAIL_PERSONALIZATION_QUEUE })]
-        : [],
+      imports: [
+        LeadCampaignSendingModule.register(),
+        LeadAnalyticsModule,
+        ...(useQueue
+          ? [BullModule.registerQueue({ name: LEAD_EMAIL_PERSONALIZATION_QUEUE })]
+          : []),
+      ],
       controllers: [LeadEmailPersonalizationController],
       providers: [
         LeadEmailPersonalizationService,
-        ParallelEmailGenerationService,
+        SplitEmailGenerationService,
         GrokEmailGenerator,
         GroqEmailGenerator,
         OpenRouterEmailGenerator,

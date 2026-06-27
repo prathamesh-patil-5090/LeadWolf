@@ -360,6 +360,45 @@ Example `OutreachEmail` record:
 
 With `LEAD_EMAIL_PERSONALIZATION_SYNC=true` (default), runs in-process.
 
+## Automated pipeline queue
+
+When `REDIS_URL` is set and `LEAD_PIPELINE_SYNC=false` (default with Redis), every **new** lead from search is enqueued in BullMQ (`lead-pipeline` queue). One lead is processed at a time (`concurrency: 1`) to respect API rate limits.
+
+**Full automatic flow per lead:**
+
+```text
+Enrich → Company → Contacts → Verify → Generate email → Send (Brevo)
+```
+
+### Failure statuses
+
+If a step fails, the lead status becomes:
+
+| Status | Failed step |
+|--------|-------------|
+| `FAILED_ENRICHMENT` | Profile enrichment |
+| `FAILED_COMPANY_DISCOVERY` | Company scrape |
+| `FAILED_CONTACT_DISCOVERY` | No email found |
+| `FAILED_VERIFICATION` | Email not verified |
+| `FAILED_EMAIL_GENERATION` | Groq/OpenRouter failed |
+| `FAILED_CAMPAIGN_SENDING` | Brevo send failed |
+
+`pipelineFailedStep`, `pipelineError`, and `pipelineFailedAt` are stored on the lead for tracing.
+
+**Resume:** re-queue with `POST /api/pipeline/queue/enqueue/:leadId` — processing continues from the failed step.
+
+**Auto-retry:** when the queue is idle, retryable failures (rate limits, timeouts) are re-queued every 60s (`LEAD_PIPELINE_AUTO_RETRY=true`).
+
+### Pipeline API
+
+`GET /api/pipeline/queue/status` — waiting/active counts, `isEmpty`
+
+`POST /api/pipeline/retry-failed?limit=25` — re-queue failed leads
+
+`POST /api/pipeline/queue/enqueue/:leadId` — manual enqueue / resume
+
+Successful jobs are **removed from Redis** (`removeOnComplete: true`).
+
 ## Campaign Sending (Brevo)
 
 Sends the primary `OutreachEmail` via Brevo transactional API. Lead status moves to `SENT`.
