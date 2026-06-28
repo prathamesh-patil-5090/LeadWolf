@@ -6,6 +6,7 @@ import { Columns3, Loader2 } from 'lucide-react';
 import { LeadsDataTable } from '@/components/leads/leads-data-table';
 import { PageHeader } from '@/components/page-header';
 import { PaginationBar } from '@/components/pagination-bar';
+import { SearchRecipesPanel } from '@/components/search-recipes-panel';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -156,6 +157,8 @@ export default function LeadsPage() {
         }
       />
       <div className="space-y-4 p-4 sm:p-6">
+        <SearchRecipesPanel />
+
         <div className="flex flex-wrap items-end gap-3">
           <div className="grid w-full max-w-xs gap-1.5">
             <Label htmlFor="role">Role</Label>

@@ -8,6 +8,8 @@ import { LEAD_SEARCH_PROVIDER, LEAD_SEARCH_QUEUE } from './constants';
 import { LeadSearchController } from './lead-search.controller';
 import { LeadSearchProcessor } from './lead-search.processor';
 import { LeadSearchService } from './lead-search.service';
+import { SearchRecipeController } from './search-recipe.controller';
+import { SearchRecipeService } from './search-recipe.service';
 import { BrightDataLinkedInLeadSearchProvider } from './providers/bright-data-linkedin-lead-search.provider';
 import { CombinedLeadSearchProvider } from './providers/combined-lead-search.provider';
 import { GithubLeadSearchProvider } from './providers/github-lead-search.provider';
@@ -29,9 +31,10 @@ export class LeadSearchModule {
           ? [BullModule.registerQueue({ name: LEAD_SEARCH_QUEUE })]
           : []),
       ],
-      controllers: [LeadSearchController],
+      controllers: [LeadSearchController, SearchRecipeController],
       providers: [
         LeadSearchService,
+        SearchRecipeService,
         BrowserService,
         GithubLeadSearchProvider,
         LinkedInUrlDiscoveryService,

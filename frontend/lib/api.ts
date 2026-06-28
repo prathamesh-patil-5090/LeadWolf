@@ -13,6 +13,7 @@ import type {
   PipelineQueueStatus,
   PipelineLogs,
   QuotaSnapshot,
+  SearchRecipe,
   SentEmailDetail,
 } from './types';
 
@@ -162,6 +163,29 @@ export const api = {
     }),
   getSearchJob: (jobId: string) =>
     request<LeadSearchJob>(`/leads/search/${jobId}`),
+
+  listSearchRecipes: () => request<SearchRecipe[]>('/search-recipes'),
+  updateSearchRecipe: (
+    id: string,
+    body: Partial<
+      Pick<
+        SearchRecipe,
+        | 'name'
+        | 'description'
+        | 'query'
+        | 'role'
+        | 'roles'
+        | 'location'
+        | 'company'
+        | 'limit'
+        | 'expandTechRoles'
+      >
+    >,
+  ) =>
+    request<SearchRecipe>(`/search-recipes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
 
   listCompanies: (page = 1, pageSize = 20) =>
     request<PaginatedCompanies>(
