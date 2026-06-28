@@ -1,10 +1,15 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { Loader2, Search } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
+import {
+  recipeToFormValues,
+  SearchRecipesPicker,
+} from '@/components/search-recipes-picker';
 import { StatusBadge } from '@/components/status-badge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -36,7 +41,7 @@ import {
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
-import type { Lead, LeadSearchJob, LeadSearchJobStatus } from '@/lib/types';
+import type { Lead, LeadSearchJob, LeadSearchJobStatus, SearchRecipe } from '@/lib/types';
 
 const LIMIT_OPTIONS = [5, 10, 25, 50, 100] as const;
 
@@ -47,7 +52,8 @@ function parseRolesInput(text: string) {
     .filter(Boolean);
 }
 
-export default function SearchPage() {
+function SearchPageContent() {
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState('Senior Software Engineers India');
   const [role, setRole] = useState('');
   const [rolesText, setRolesText] = useState('');
@@ -56,6 +62,8 @@ export default function SearchPage() {
   const [limit, setLimit] = useState(25);
   const [expandTechRoles, setExpandTechRoles] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [savingRecipe, setSavingRecipe] = useState(false);
+  const [activeRecipeId, setActiveRecipeId] = useState<string | null>(null);
   const [job, setJob] = useState<LeadSearchJob | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -67,6 +75,66 @@ export default function SearchPage() {
       if (pollRef.current) clearInterval(pollRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    const jobId = searchParams.get('jobId');
+    if (!jobId) return;
+
+    void api
+      .getSearchJob(jobId)
+      .then((loaded) => {
+        setJob(loaded);
+        if (loaded.status === 'PENDING' || loaded.status === 'RUNNING') {
+          void pollJob(loaded.id);
+        }
+      })
+      .catch(() => {
+        toast.error('Failed to load search job');
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
+  function loadRecipe(recipe: SearchRecipe) {
+    const values = recipeToFormValues(recipe);
+    setQuery(values.query);
+    setRole(values.role);
+    setRolesText(values.rolesText);
+    setLocation(values.location);
+    setCompany(values.company);
+    setLimit(values.limit);
+    setExpandTechRoles(values.expandTechRoles);
+    setActiveRecipeId(recipe.id);
+    toast.message(`Loaded “${recipe.name}”`);
+  }
+
+  async function saveActiveRecipe() {
+    if (!activeRecipeId) return;
+
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < 2) {
+      toast.error('Query must be at least 2 characters');
+      return;
+    }
+
+    setSavingRecipe(true);
+    try {
+      const roles = parseRolesInput(rolesText);
+      await api.updateSearchRecipe(activeRecipeId, {
+        query: trimmedQuery,
+        role: roles.length > 0 ? '' : role.trim() || undefined,
+        roles,
+        location: location.trim() || undefined,
+        company: company.trim() || undefined,
+        limit,
+        expandTechRoles,
+      });
+      toast.success('Recipe saved');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to save recipe');
+    } finally {
+      setSavingRecipe(false);
+    }
+  }
 
   function stopPolling() {
     if (pollRef.current) {
@@ -145,6 +213,14 @@ export default function SearchPage() {
         description="Discover developers via GitHub + LinkedIn (Bright Data when configured)"
       />
       <div className="grid gap-6 p-4 sm:p-6 lg:grid-cols-[minmax(0,26rem)_1fr]">
+        <div className="space-y-4">
+          <SearchRecipesPicker
+            activeRecipeId={activeRecipeId}
+            onSelect={loadRecipe}
+            onSave={() => void saveActiveRecipe()}
+            saving={savingRecipe}
+          />
+
         <Card className="h-fit">
           <CardHeader>
             <CardTitle>New search</CardTitle>
@@ -292,6 +368,7 @@ export default function SearchPage() {
             </form>
           </CardContent>
         </Card>
+        </div>
 
         <Card>
           <CardHeader>
@@ -482,4 +559,18 @@ function JobStatusBadge({ status }: { status: LeadSearchJobStatus }) {
           : 'outline';
 
   return <Badge variant={variant}>{status}</Badge>;
+}
+
+export default function SearchPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-48 items-center justify-center">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <SearchPageContent />
+    </Suspense>
+  );
 }
