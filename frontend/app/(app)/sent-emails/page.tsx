@@ -42,6 +42,7 @@ export default function SentEmailsPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncingBrevo, setSyncingBrevo] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,6 +72,25 @@ export default function SentEmailsPage() {
     setSheetOpen(true);
   }
 
+  async function syncAllBrevo() {
+    setSyncingBrevo(true);
+    try {
+      const result = await api.syncBrevoEvents({ days: 30 });
+      if (!result.configured) {
+        toast.error(result.message ?? 'Brevo API key not configured');
+        return;
+      }
+      toast.success(
+        `Brevo sync: ${result.fetched ?? 0} events fetched, ${result.created ?? 0} new recorded`,
+      );
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Brevo sync failed');
+    } finally {
+      setSyncingBrevo(false);
+    }
+  }
+
   async function syncAllGmail() {
     setSyncing(true);
     try {
@@ -95,6 +115,19 @@ export default function SentEmailsPage() {
           <>
             <Button variant="outline" size="sm" onClick={() => void load()}>
               Refresh
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={syncingBrevo}
+              onClick={() => void syncAllBrevo()}
+            >
+              {syncingBrevo ? (
+                <Loader2 className="mr-1 size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-1 size-4" />
+              )}
+              Sync Brevo events
             </Button>
             <Button
               size="sm"
@@ -158,7 +191,7 @@ export default function SentEmailsPage() {
 
         <p className="text-sm text-muted-foreground">
           Click a row to view the full email, Brevo/Gmail event timeline, and
-          sync Gmail replies for that lead.
+          sync opens, clicks, and delivery from Brevo or Gmail replies.
         </p>
 
         <div className="rounded-md border">

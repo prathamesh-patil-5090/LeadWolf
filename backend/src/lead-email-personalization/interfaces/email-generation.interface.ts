@@ -6,10 +6,13 @@ export interface OutreachEmailContext {
   leadLocation?: string;
   leadWebsite?: string;
   leadGithub?: string;
+  leadLinkedin?: string;
+  leadProfileUrl?: string;
   companySummary?: string;
   companyIndustry?: string;
   companyProducts?: string;
   personalizationHooks: string[];
+  personalizeViaProfile: boolean;
   senderName: string;
   senderTitle: string;
   senderCompany: string;

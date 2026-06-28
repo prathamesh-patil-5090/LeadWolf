@@ -74,6 +74,28 @@ export const api = {
         body: JSON.stringify({ limit }),
       },
     ),
+  syncBrevoEvents: (params?: {
+    days?: number;
+    startDate?: string;
+    endDate?: string;
+    outreachEmailId?: string;
+    leadId?: string;
+    limit?: number;
+  }) =>
+    request<{
+      configured: boolean;
+      fetched?: number;
+      processed?: number;
+      created?: number;
+      skipped?: number;
+      startDate?: string;
+      endDate?: string;
+      message?: string;
+      error?: string;
+    }>('/analytics/sync-brevo-events', {
+      method: 'POST',
+      body: JSON.stringify(params ?? {}),
+    }),
 
   listSentEmails: (params: {
     page?: number;

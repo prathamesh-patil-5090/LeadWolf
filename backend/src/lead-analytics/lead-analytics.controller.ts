@@ -10,6 +10,7 @@ import {
 import { EmailEventType, LeadStatus } from '../../generated/prisma/client';
 import { RateLimitService } from '../shared/rate-limit/rate-limit.service';
 import { GmailReplySyncService } from './gmail-reply-sync.service';
+import { BrevoEventSyncService } from './brevo-event-sync.service';
 import { LeadAnalyticsService } from './lead-analytics.service';
 
 @Controller('analytics')
@@ -17,6 +18,7 @@ export class LeadAnalyticsController {
   constructor(
     private readonly analyticsService: LeadAnalyticsService,
     private readonly gmailReplySyncService: GmailReplySyncService,
+    private readonly brevoEventSyncService: BrevoEventSyncService,
     private readonly rateLimitService: RateLimitService,
   ) {}
 
@@ -77,5 +79,26 @@ export class LeadAnalyticsController {
   @Post('sync-gmail-replies')
   syncGmailReplies(@Body() body: { limit?: number }) {
     return this.gmailReplySyncService.syncReplies(body?.limit ?? 20);
+  }
+
+  @Post('sync-brevo-events')
+  syncBrevoEvents(
+    @Body()
+    body: {
+      days?: number;
+      startDate?: string;
+      endDate?: string;
+      outreachEmailId?: string;
+      leadId?: string;
+      limit?: number;
+    },
+  ) {
+    if (body.outreachEmailId) {
+      return this.brevoEventSyncService.syncForOutreachEmail(
+        body.outreachEmailId,
+      );
+    }
+
+    return this.brevoEventSyncService.syncEvents(body);
   }
 }

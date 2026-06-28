@@ -24,7 +24,7 @@ export class BrevoWebhookService {
 
   async handleTransactionalEvent(payload: Record<string, unknown>) {
     const rawEvent = String(payload.event ?? '');
-    const mappedType = BREVO_EVENT_TYPE_MAP[rawEvent];
+    const mappedType = BREVO_EVENT_TYPE_MAP[rawEvent] ?? BREVO_EVENT_TYPE_MAP[rawEvent.toLowerCase()];
     if (!mappedType) {
       this.logger.debug(`Ignoring unsupported Brevo event: ${rawEvent}`);
       return { ignored: true, reason: 'unsupported_event', event: rawEvent };
@@ -44,15 +44,22 @@ export class BrevoWebhookService {
     let outreachEmailId =
       tagContext.outreachEmailId ?? headerContext.outreachEmailId;
 
-    if ((!leadId || !outreachEmailId) && messageId) {
+    if (messageId) {
+      const normalizedId = normalizeMessageId(messageId);
       const outreachEmail = await this.prisma.outreachEmail.findFirst({
-        where: { brevoMessageId: messageId },
+        where: {
+          OR: [
+            { brevoMessageId: messageId },
+            { brevoMessageId: normalizedId },
+            { brevoMessageId: `<${normalizedId}>` },
+          ],
+        },
         select: { id: true, leadId: true },
       });
 
       if (outreachEmail) {
-        outreachEmailId ??= outreachEmail.id;
-        leadId ??= outreachEmail.leadId;
+        outreachEmailId = outreachEmail.id;
+        leadId = outreachEmail.leadId;
       }
     }
 
@@ -160,6 +167,16 @@ export class BrevoWebhookService {
       return new Date(tsEvent * 1000);
     }
 
+    const date =
+      this.readString(payload.date) ?? this.readString(payload.Date);
+    if (date) {
+      const normalized = date.includes('T') ? date : date.replace(' ', 'T');
+      const parsed = new Date(normalized);
+      if (!Number.isNaN(parsed.getTime())) {
+        return parsed;
+      }
+    }
+
     return new Date();
   }
 
@@ -231,4 +248,12 @@ function normalizeEmailAddress(value?: string) {
 
   const match = value.match(/<([^>]+)>/);
   return (match?.[1] ?? value).trim().toLowerCase();
+}
+
+function normalizeMessageId(value?: string | null) {
+  if (!value?.trim()) {
+    return '';
+  }
+
+  return value.replace(/^<|>$/g, '').trim();
 }
