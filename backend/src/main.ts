@@ -1,29 +1,18 @@
-import { ValidationPipe } from '@nestjs/common';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
+import type { Request, Response } from 'express';
+import { createNestApp } from './create-app';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-
-  app.enableCors({
-    origin: process.env.CORS_ORIGIN?.split(',').map((o) => o.trim()) ?? [
-      'http://localhost:3000',
-    ],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  });
-
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
-    }),
-  );
-
-  app.setGlobalPrefix('api');
-
+  const { server } = await createNestApp();
   const port = process.env.PORT ?? 3001;
-  await app.listen(port);
+  server.listen(port);
 }
 
-void bootstrap();
+/** Vercel serverless entry — must export a request handler. */
+export default async function handler(req: Request, res: Response) {
+  const { server } = await createNestApp();
+  return server(req, res);
+}
+
+if (!process.env.VERCEL) {
+  void bootstrap();
+}
