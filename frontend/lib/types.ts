@@ -81,6 +81,23 @@ export interface LeadSearchJob {
   updatedAt: string;
 }
 
+export interface SearchRecipe {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  query: string;
+  role?: string | null;
+  roles: string[];
+  location?: string | null;
+  company?: string | null;
+  limit: number;
+  expandTechRoles: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Company {
   id: string;
   name: string;
