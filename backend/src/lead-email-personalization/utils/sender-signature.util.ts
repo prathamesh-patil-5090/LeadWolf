@@ -1,5 +1,9 @@
 import { ConfigService } from '@nestjs/config';
 import { OutreachEmailContext } from '../interfaces/email-generation.interface';
+import {
+  buildProfilePersonalizationHooks,
+  shouldPersonalizeViaProfile,
+} from './profile-context.util';
 
 export interface SenderSignatureConfig {
   senderName: string;
@@ -128,7 +132,9 @@ export function toOutreachEmailContext(
     location: string | null;
     website: string | null;
     companyWebsite: string | null;
+    profileUrl: string;
     githubUrl: string | null;
+    linkedinUrl: string | null;
     companyRecord: {
       summary: string | null;
       industry: string | null;
@@ -138,15 +144,23 @@ export function toOutreachEmailContext(
   },
   sender: SenderSignatureConfig,
 ): OutreachEmailContext {
-  const hooks = Array.isArray(lead.companyRecord?.personalizationHooks)
+  const companyHooks = Array.isArray(lead.companyRecord?.personalizationHooks)
     ? lead.companyRecord.personalizationHooks.filter(
         (hook): hook is string => typeof hook === 'string',
       )
     : [];
 
+  const profileHooks = buildProfilePersonalizationHooks({
+    githubUrl: lead.githubUrl,
+    linkedinUrl: lead.linkedinUrl,
+    profileUrl: lead.profileUrl,
+    location: lead.location,
+    website: lead.website ?? lead.companyWebsite,
+  });
+
   const signatureBlock = buildSenderSignatureBlock(sender);
 
-  return {
+  const context: OutreachEmailContext = {
     leadName: lead.name,
     leadRole: lead.role,
     leadCompany: lead.company,
@@ -154,10 +168,13 @@ export function toOutreachEmailContext(
     leadLocation: lead.location ?? undefined,
     leadWebsite: lead.website ?? lead.companyWebsite ?? undefined,
     leadGithub: lead.githubUrl ?? undefined,
+    leadLinkedin: lead.linkedinUrl ?? undefined,
+    leadProfileUrl: lead.profileUrl ?? undefined,
     companySummary: lead.companyRecord?.summary ?? undefined,
     companyIndustry: lead.companyRecord?.industry ?? undefined,
     companyProducts: lead.companyRecord?.products ?? undefined,
-    personalizationHooks: hooks,
+    personalizationHooks: [...profileHooks, ...companyHooks],
+    personalizeViaProfile: false,
     senderName: sender.senderName,
     senderTitle: sender.senderTitle,
     senderCompany: sender.senderCompany,
@@ -168,4 +185,8 @@ export function toOutreachEmailContext(
     senderPitch: sender.senderPitch,
     signatureBlock,
   };
+
+  context.personalizeViaProfile = shouldPersonalizeViaProfile(context);
+
+  return context;
 }

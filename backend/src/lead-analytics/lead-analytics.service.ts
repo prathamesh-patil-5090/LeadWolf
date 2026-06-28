@@ -33,24 +33,67 @@ export class LeadAnalyticsService {
       }
     }
 
+    const links = await this.resolveEventLinks(
+      input.leadId,
+      input.outreachEmailId,
+    );
+
     const event = await this.prisma.emailEvent.create({
       data: {
         eventType: input.eventType,
         source: input.source,
         externalId: input.externalId,
-        leadId: input.leadId,
-        outreachEmailId: input.outreachEmailId,
+        leadId: links.leadId,
+        outreachEmailId: links.outreachEmailId,
         recipientEmail: input.recipientEmail,
         payload: input.payload as object | undefined,
         occurredAt: input.occurredAt ?? new Date(),
       },
     });
 
-    if (input.leadId) {
-      await this.updateLeadStatusFromEvent(input.leadId, input.eventType);
+    if (links.leadId) {
+      await this.updateLeadStatusFromEvent(links.leadId, input.eventType);
     }
 
     return { event, created: true };
+  }
+
+  private async resolveEventLinks(
+    leadId?: string,
+    outreachEmailId?: string,
+  ): Promise<{ leadId?: string; outreachEmailId?: string }> {
+    let resolvedLeadId = leadId;
+    let resolvedOutreachEmailId = outreachEmailId;
+
+    if (outreachEmailId) {
+      const outreachEmail = await this.prisma.outreachEmail.findUnique({
+        where: { id: outreachEmailId },
+        select: { id: true, leadId: true },
+      });
+
+      if (!outreachEmail) {
+        resolvedOutreachEmailId = undefined;
+      } else {
+        resolvedOutreachEmailId = outreachEmail.id;
+        resolvedLeadId = outreachEmail.leadId;
+      }
+    }
+
+    if (resolvedLeadId) {
+      const lead = await this.prisma.lead.findUnique({
+        where: { id: resolvedLeadId },
+        select: { id: true },
+      });
+
+      if (!lead) {
+        resolvedLeadId = undefined;
+      }
+    }
+
+    return {
+      leadId: resolvedLeadId,
+      outreachEmailId: resolvedOutreachEmailId,
+    };
   }
 
   async getSummary() {

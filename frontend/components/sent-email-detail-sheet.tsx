@@ -32,6 +32,7 @@ export function SentEmailDetailSheet({
   const [detail, setDetail] = useState<SentEmailDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [syncingBrevo, setSyncingBrevo] = useState(false);
 
   useEffect(() => {
     if (!open || !emailId) {
@@ -58,6 +59,28 @@ export function SentEmailDetailSheet({
       cancelled = true;
     };
   }, [open, emailId, onOpenChange]);
+
+  async function syncBrevo() {
+    if (!emailId) return;
+    setSyncingBrevo(true);
+    try {
+      const result = await api.syncBrevoEvents({ outreachEmailId: emailId });
+      if (!result.configured) {
+        toast.error(result.message ?? 'Brevo API key not configured');
+        return;
+      }
+      toast.success(
+        `Brevo sync: ${result.created ?? 0} new event(s) recorded`,
+      );
+      const refreshed = await api.getSentEmailDetail(emailId);
+      setDetail(refreshed);
+      onSynced?.();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Brevo sync failed');
+    } finally {
+      setSyncingBrevo(false);
+    }
+  }
 
   async function syncGmail() {
     setSyncing(true);
@@ -124,6 +147,19 @@ export function SentEmailDetailSheet({
                   <Button
                     variant="outline"
                     size="sm"
+                    disabled={syncingBrevo}
+                    onClick={() => void syncBrevo()}
+                  >
+                    {syncingBrevo ? (
+                      <Loader2 className="mr-1 size-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="mr-1 size-3" />
+                    )}
+                    Sync Brevo events
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
                     disabled={syncing}
                     onClick={() => void syncGmail()}
                   >
@@ -160,8 +196,8 @@ export function SentEmailDetailSheet({
                 <h3 className="text-sm font-medium">Event timeline</h3>
                 {email.emailEvents.length === 0 ? (
                   <p className="text-sm text-muted-foreground">
-                    No Brevo or Gmail events recorded yet. Use Gmail sync or
-                    configure Brevo webhooks.
+                    No Brevo or Gmail events recorded yet. Sync Brevo events for
+                    opens/clicks, or Gmail sync for replies.
                   </p>
                 ) : (
                   <ul className="space-y-2">
