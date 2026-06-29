@@ -13,6 +13,8 @@ export interface OutreachEmailContext {
   companyProducts?: string;
   personalizationHooks: string[];
   personalizeViaProfile: boolean;
+  /** True when sending to a shared inbox (info@, contact@, etc.). */
+  addressAsCompanyInbox: boolean;
   senderName: string;
   senderTitle: string;
   senderCompany: string;

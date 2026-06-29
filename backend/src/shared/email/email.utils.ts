@@ -17,6 +17,54 @@ const BLOCKED_EMAIL_PATTERNS = [
   /^.{0,2}@/,
 ];
 
+const GENERIC_COMPANY_INBOX_LOCAL_PARTS = new Set([
+  'info',
+  'contact',
+  'hello',
+  'hi',
+  'team',
+  'sales',
+  'support',
+  'help',
+  'enquiries',
+  'enquiry',
+  'inquiries',
+  'inquiry',
+  'admin',
+  'office',
+  'careers',
+  'jobs',
+  'hr',
+  'marketing',
+  'press',
+  'media',
+  'billing',
+  'accounts',
+  'service',
+  'customerservice',
+  'customer',
+  'feedback',
+  'general',
+  'mail',
+  'reception',
+  'partners',
+  'business',
+  'corporate',
+  'founder',
+  'founders',
+]);
+
+/** Shared inboxes like info@company.com — not a named individual. */
+export function isGenericCompanyInbox(email?: string | null): boolean {
+  const normalized = normalizeEmail(email ?? '');
+  if (!normalized) {
+    return false;
+  }
+
+  const localPart = normalized.split('@')[0]?.split('+')[0] ?? '';
+  return GENERIC_COMPANY_INBOX_LOCAL_PARTS.has(localPart);
+}
+
 export function normalizeEmail(raw: string): string | undefined {
   if (!raw?.trim()) {
     return undefined;
@@ -151,7 +199,7 @@ export function pickEmailForLead(
   }
 
   const contactMatch = contacts.find((entry) =>
-    /^(contact|hello|info|team|sales|support|founder)@/i.test(entry.email),
+    isGenericCompanyInbox(entry.email),
   );
   if (contactMatch) {
     return contactMatch;

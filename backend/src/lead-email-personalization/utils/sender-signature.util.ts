@@ -1,4 +1,5 @@
 import { ConfigService } from '@nestjs/config';
+import { isGenericCompanyInbox } from '../../shared/email/email.utils';
 import { OutreachEmailContext } from '../interfaces/email-generation.interface';
 import {
   buildProfilePersonalizationHooks,
@@ -159,6 +160,7 @@ export function toOutreachEmailContext(
   });
 
   const signatureBlock = buildSenderSignatureBlock(sender);
+  const addressAsCompanyInbox = isGenericCompanyInbox(lead.email);
 
   const context: OutreachEmailContext = {
     leadName: lead.name,
@@ -173,8 +175,11 @@ export function toOutreachEmailContext(
     companySummary: lead.companyRecord?.summary ?? undefined,
     companyIndustry: lead.companyRecord?.industry ?? undefined,
     companyProducts: lead.companyRecord?.products ?? undefined,
-    personalizationHooks: [...profileHooks, ...companyHooks],
+    personalizationHooks: addressAsCompanyInbox
+      ? companyHooks
+      : [...profileHooks, ...companyHooks],
     personalizeViaProfile: false,
+    addressAsCompanyInbox,
     senderName: sender.senderName,
     senderTitle: sender.senderTitle,
     senderCompany: sender.senderCompany,

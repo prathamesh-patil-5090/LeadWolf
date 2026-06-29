@@ -15,13 +15,16 @@ import {
 } from './crag-product.context';
 
 export function buildOutreachEmailPrompt(context: OutreachEmailContext): string {
-  const profileFirst = shouldPersonalizeViaProfile(context);
+  const companyInbox = context.addressAsCompanyInbox;
+  const profileFirst = !companyInbox && shouldPersonalizeViaProfile(context);
   const hooks =
     context.personalizationHooks.length > 0
       ? context.personalizationHooks.map((hook) => `- ${hook}`).join('\n')
       : profileFirst
         ? '- Use their GitHub or LinkedIn presence as the main personalization anchor'
-        : '- No specific hooks — infer one reasonable observation from company summary/products only';
+        : companyInbox
+          ? '- No specific hooks — infer one reasonable observation from company summary/products only'
+          : '- No specific hooks — infer one reasonable observation from company summary/products only';
 
   const problems = CRAG_PROBLEMS.map((item) => `- ${item}`).join('\n');
   const benefits = CRAG_BENEFITS.map((item) => `- ${item}`).join('\n');
@@ -35,13 +38,27 @@ export function buildOutreachEmailPrompt(context: OutreachEmailContext): string 
     ? 'Company: not available — do NOT mention an employer or say "your company"'
     : `Company: ${context.leadCompany}`;
 
-  const emailStructure = profileFirst
-    ? buildProfileFirstStructure(context)
-    : buildCompanyFirstStructure(context);
+  const emailStructure = companyInbox
+    ? buildCompanyInboxStructure(context)
+    : profileFirst
+      ? buildProfileFirstStructure(context)
+      : buildCompanyFirstStructure(context);
 
-  const subjectRule = profileFirst
-    ? '- Subject: reference their engineering work or developer profile — 5–9 words, professional (no company name, no "Unknown")'
-    : '- Subject: specific to their company or role — 5–9 words, professional (not clickbait)';
+  const subjectRule = companyInbox
+    ? '- Subject: company-focused — reference their product, engineering team, or industry (5–9 words). Do NOT use a person\'s name'
+    : profileFirst
+      ? '- Subject: reference their engineering work or developer profile — 5–9 words, professional (no company name, no "Unknown")'
+      : '- Subject: specific to their company or role — 5–9 words, professional (not clickbait)';
+
+  const companyInboxRules = companyInbox
+    ? `
+=== COMPANY INBOX RULES (sending to ${context.leadEmail}) ===
+- This is a shared company mailbox — NOT a personal address for ${context.leadName}
+- Greet the company or team (e.g. "Hi ${isUnknownLeadField(context.leadCompany) ? 'there' : `${context.leadCompany} team`}") — do NOT use ${context.leadName.split(/\s+/)[0]} or any personal name
+- Do NOT write "I saw your LinkedIn" or reference the contact's personal profile
+- Personalize using company context, products, and industry only
+`
+    : '';
 
   const profileRules = profileFirst
     ? `
@@ -54,12 +71,20 @@ export function buildOutreachEmailPrompt(context: OutreachEmailContext): string 
 `
     : '';
 
-  return `Write a personalized cold outreach email from ${context.senderName} (${context.senderCompany || 'CRag'}) to sell a discovery call for CRag.
-
-=== RECIPIENT ===
+  const recipientBlock = companyInbox
+    ? `=== RECIPIENT ===
+Sending to: ${context.leadEmail} (shared company inbox)
+Associated contact (do NOT greet by this name): ${context.leadName}
+${roleLine}
+${companyLine}`
+    : `=== RECIPIENT ===
 Name: ${context.leadName}
 ${roleLine}
-${companyLine}
+${companyLine}`;
+
+  return `Write a personalized cold outreach email from ${context.senderName} (${context.senderCompany || 'CRag'}) to sell a discovery call for CRag.
+
+${recipientBlock}
 Location: ${context.leadLocation ?? 'unknown'}
 Website: ${context.leadWebsite ?? 'unknown'}
 GitHub: ${context.leadGithub ?? 'unknown'}
@@ -73,7 +98,7 @@ Summary: ${context.companySummary ?? 'No company summary available.'}
 
 Personalization hooks (use at least one if relevant):
 ${hooks}
-${profileRules}
+${companyInboxRules}${profileRules}
 === PRODUCT: CRag ===
 Positioning: ${CRAG_POSITIONING}
 
@@ -124,6 +149,24 @@ function buildProfileFirstStructure(context: OutreachEmailContext) {
 3. Bridge: connect engineers who share work publicly to pains CRag solves — documentation drift, onboarding friction, knowledge scattered across repos and wikis.
 4. CRag value: 2–3 sentences — living engineering knowledge base, auto-synced docs, source-backed answers from repos and internal docs.
 5. CTA: ask for a 15-minute call or quick demo. Keep it low-pressure.`;
+}
+
+function buildCompanyInboxStructure(context: OutreachEmailContext) {
+  const company = isUnknownLeadField(context.leadCompany)
+    ? 'your organization'
+    : context.leadCompany;
+
+  const greeting = isUnknownLeadField(context.leadCompany)
+    ? '"Hi there" or "Hello"'
+    : `"Hi ${context.leadCompany} team" or "Hello ${context.leadCompany}"`;
+
+  return `=== EMAIL STRUCTURE (company inbox — address the company, not an individual) ===
+1. Opening: greet with ${greeting}. Never use a person's first name.
+2. Company observation: ONE concrete detail from company context, products, industry, or hooks.
+3. Their likely pain: connect 1–2 problems CRag solves to what engineering teams like theirs face (onboarding, doc drift, tribal knowledge).
+4. CRag value: 2–3 sentences on what CRag does for their engineering org — living knowledge base, auto-synced docs, source-backed answers.
+5. Specific benefit: one sentence on how ${company} could benefit given what you know about them.
+6. CTA: ask for a 15-minute call with whoever owns engineering documentation or developer experience. Keep it low-pressure.`;
 }
 
 function buildCompanyFirstStructure(context: OutreachEmailContext) {

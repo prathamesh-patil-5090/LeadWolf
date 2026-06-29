@@ -26,6 +26,10 @@ export function hasRichCompanyContext(context: OutreachEmailContext): boolean {
 export function shouldPersonalizeViaProfile(
   context: OutreachEmailContext,
 ): boolean {
+  if (context.addressAsCompanyInbox) {
+    return false;
+  }
+
   const sparseProfessional =
     isUnknownLeadField(context.leadRole) ||
     isUnknownLeadField(context.leadCompany);
