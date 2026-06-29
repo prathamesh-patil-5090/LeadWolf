@@ -1,18 +1,11 @@
-import type { Request, Response } from 'express';
-import { createNestApp } from './create-app';
+import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+import { configureNestApp } from './create-app';
 
 async function bootstrap() {
-  const { server } = await createNestApp();
-  const port = process.env.PORT ?? 3001;
-  server.listen(port);
+  const app = await NestFactory.create(AppModule);
+  await configureNestApp(app);
+  await app.listen(process.env.PORT ?? 3001);
 }
 
-/** Vercel serverless entry — must export a request handler. */
-export default async function handler(req: Request, res: Response) {
-  const { server } = await createNestApp();
-  return server(req, res);
-}
-
-if (!process.env.VERCEL) {
-  void bootstrap();
-}
+void bootstrap();
